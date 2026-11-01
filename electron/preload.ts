@@ -34,4 +34,5 @@ contextBridge.exposeInMainWorld('api', {
     set: (input: unknown) => ipcRenderer.invoke('settings:set', input),
   },
   dashboard: { data: () => ipcRenderer.invoke('dashboard:data') },
+  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (name: string) => ipcRenderer.invoke('reports:exportPdf', name) },
 })

@@ -14,6 +14,8 @@ import { requireSessionUser } from './session'
 import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultStatus, updateStatus } from './db/repos/statuses'
 import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
+import { getReportData, type ReportType } from './reports'
+import { exportExcel, exportPdf } from './report-export'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -143,6 +145,15 @@ app.whenReady().then(() => {
     requireSessionUser()
     return getDashboardData(database!, new Date().toISOString().slice(0, 10))
   }))
+  ipcMain.handle('reports:data', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    if (!input || typeof input !== 'object') throw new Error('INVALID_INPUT')
+    const value = input as { type?: string; params?: { day?: string; month?: string; days?: number } }
+    if (value.type !== 'daily' && value.type !== 'monthly' && value.type !== 'upcoming-events') throw new Error('INVALID_INPUT')
+    return getReportData(database!, value.type as ReportType, value.params ?? {})
+  }))
+  ipcMain.handle('reports:exportExcel', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportExcel(mainWindow, report as { period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
+  ipcMain.handle('reports:exportPdf', (_event, name: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || typeof name !== 'string') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, name) }))
 })
 
 app.on('second-instance', () => mainWindow?.focus())
