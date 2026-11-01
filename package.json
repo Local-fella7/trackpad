@@ -14,7 +14,7 @@
     "dev": "concurrently -k \"pnpm dev:web\" \"pnpm dev:electron\"",
     "dev:web": "nuxt dev",
     "dev:electron": "wait-on tcp:3000 && tsup --watch --onSuccess \"electron .\"",
-    "dist": "pnpm build && electron-builder --win --x64",
+    "dist": "pnpm build && electron-builder --win --x64 --publish never",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
