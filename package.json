@@ -9,6 +9,7 @@
     "build:web": "nuxt generate",
     "build:electron": "tsup",
     "typecheck:electron": "tsup --dts",
+    "test": "vitest run",
     "dev": "concurrently -k \"pnpm dev:web\" \"pnpm dev:electron\"",
     "dev:web": "nuxt dev",
     "dev:electron": "wait-on tcp:3000 && tsup --watch --onSuccess \"electron .\"",
@@ -39,6 +40,7 @@
     "electron-builder": "^26.18.0",
     "tsup": "^9.0.0",
     "typescript": "^6.0.3",
+    "vitest": "^5.0.5",
     "wait-on": "^9.5.1"
   }
 }
