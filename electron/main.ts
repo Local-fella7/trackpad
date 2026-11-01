@@ -16,6 +16,8 @@ import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
 import { getReportData, type ReportType } from './reports'
 import { exportExcel, exportPdf } from './report-export'
+import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
+import { copyFileSync, existsSync } from 'node:fs'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -154,6 +156,27 @@ app.whenReady().then(() => {
   }))
   ipcMain.handle('reports:exportExcel', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportExcel(mainWindow, report as { period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   ipcMain.handle('reports:exportPdf', (_event, name: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || typeof name !== 'string') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, name) }))
+  const backupDirectory = path.join(app.getPath('userData'), 'backups')
+  const makeBackup = async () => {
+    const file = await createBackup(database!, backupDirectory)
+    applyRetention(backupDirectory)
+    const driveDirectory = getSettings(database!).backup_dir_drive
+    if (driveDirectory) copyBackupToDirectory(file, driveDirectory)
+    return file
+  }
+  ipcMain.handle('backup:now', () => toIpcResult(async () => { requireSessionUser(); return makeBackup() }))
+  ipcMain.handle('backup:list', () => toIpcResult(() => { requireSessionUser(); return listBackups(backupDirectory) }))
+  ipcMain.handle('backup:health', () => toIpcResult(() => { requireSessionUser(); return backupHealth(backupDirectory) }))
+  ipcMain.handle('backup:restore', (_event, file: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    if (typeof file !== 'string' || !existsSync(file) || !validateBackup(file)) throw new Error('INVALID_BACKUP')
+    const live = path.join(app.getPath('userData'), 'data', 'records.db')
+    database?.close()
+    copyFileSync(file, live)
+    app.relaunch(); app.exit(0)
+    return true
+  }))
+  setInterval(() => { if (database) void makeBackup().catch(() => undefined) }, 60 * 60 * 1000).unref()
 })
 
 app.on('second-instance', () => mainWindow?.focus())
