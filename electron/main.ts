@@ -13,6 +13,7 @@ import { getRecord, listRecords, saveRecord, softDeleteRecord } from './db/repos
 import { requireSessionUser } from './session'
 import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultStatus, updateStatus } from './db/repos/statuses'
 import { getSettings, setSetting } from './db/repos/settings'
+import { getDashboardData } from './dashboard'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -137,6 +138,10 @@ app.whenReady().then(() => {
     if (typeof value.key !== 'string' || typeof value.value !== 'string') throw new Error('INVALID_INPUT')
     setSetting(database!, value.key, value.value)
     return { key: value.key, value: value.value }
+  }))
+  ipcMain.handle('dashboard:data', () => toIpcResult(() => {
+    requireSessionUser()
+    return getDashboardData(database!, new Date().toISOString().slice(0, 10))
   }))
 })
 

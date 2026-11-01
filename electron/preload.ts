@@ -33,4 +33,5 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (input: unknown) => ipcRenderer.invoke('settings:set', input),
   },
+  dashboard: { data: () => ipcRenderer.invoke('dashboard:data') },
 })
