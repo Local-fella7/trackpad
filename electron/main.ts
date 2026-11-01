@@ -1,5 +1,4 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
-import Database from 'better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -8,34 +7,12 @@ import { getSessionUser, lockIfIdle, login, logout, touchSession } from './sessi
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from './login-attempts'
 import { toIpcResult } from './errors'
 import { loginSchema, recoverSchema, setupSchema } from './schemas'
+import { openDatabase } from './db'
+import type Database from 'better-sqlite3'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
 let database: Database.Database | null = null
-
-function openProofDatabase() {
-  const dataDirectory = path.join(app.getPath('userData'), 'data')
-  mkdirSync(dataDirectory, { recursive: true })
-
-  const db = new Database(path.join(dataDirectory, 'proof.db'))
-  db.pragma('foreign_keys = ON')
-  db.pragma('synchronous = FULL')
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-      display_name TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      recovery_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS proof_runs (
-      id INTEGER PRIMARY KEY,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `)
-  return db
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -69,7 +46,7 @@ app.whenReady().then(() => {
     return
   }
 
-  database = openProofDatabase()
+  database = openDatabase(app.getPath('userData'))
   createWindow()
 
   ipcMain.handle('proof:run', async () => {
