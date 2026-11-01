@@ -21,4 +21,16 @@ contextBridge.exposeInMainWorld('api', {
     update: (input: unknown) => ipcRenderer.invoke('records:update', input),
     remove: (id: number) => ipcRenderer.invoke('records:delete', id),
   },
+  statuses: {
+    list: () => ipcRenderer.invoke('statuses:list'),
+    create: (input: unknown) => ipcRenderer.invoke('statuses:create', input),
+    update: (input: unknown) => ipcRenderer.invoke('statuses:update', input),
+    reorder: (ids: number[]) => ipcRenderer.invoke('statuses:reorder', ids),
+    setDefault: (id: number) => ipcRenderer.invoke('statuses:setDefault', id),
+    remove: (id: number) => ipcRenderer.invoke('statuses:remove', id),
+  },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (input: unknown) => ipcRenderer.invoke('settings:set', input),
+  },
 })

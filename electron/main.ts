@@ -11,6 +11,8 @@ import { openDatabase } from './db'
 import type Database from 'better-sqlite3'
 import { getRecord, listRecords, saveRecord, softDeleteRecord } from './db/repos/records'
 import { requireSessionUser } from './session'
+import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultStatus, updateStatus } from './db/repos/statuses'
+import { getSettings, setSetting } from './db/repos/settings'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -111,6 +113,31 @@ app.whenReady().then(() => {
     return saveRecord(database!, payload.id, payload.record, payload.items, user.id)
   }))
   ipcMain.handle('records:delete', (_event, id: unknown) => toIpcResult(() => softDeleteRecord(database!, Number(id), requireSessionUser().id)))
+  ipcMain.handle('statuses:list', () => toIpcResult(() => { requireSessionUser(); return listStatuses(database!) }))
+  ipcMain.handle('statuses:create', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    if (!input || typeof input !== 'object') throw new Error('INVALID_INPUT')
+    const value = input as Record<string, unknown>
+    if (typeof value.name !== 'string' || typeof value.color !== 'string') throw new Error('INVALID_INPUT')
+    return createStatus(database!, { name: value.name.trim(), color: value.color, isActive: value.isActive !== false, excludeFromTotals: value.excludeFromTotals === true })
+  }))
+  ipcMain.handle('statuses:update', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser(); const value = input as Record<string, unknown>
+    if (!value || typeof value.id !== 'number' || typeof value.name !== 'string' || typeof value.color !== 'string') throw new Error('INVALID_INPUT')
+    return updateStatus(database!, value.id, { name: value.name.trim(), color: value.color, isActive: value.isActive !== false, excludeFromTotals: value.excludeFromTotals === true })
+  }))
+  ipcMain.handle('statuses:reorder', (_event, ids: unknown) => toIpcResult(() => { requireSessionUser(); if (!Array.isArray(ids) || !ids.every(Number.isInteger)) throw new Error('INVALID_INPUT'); return reorderStatuses(database!, ids) }))
+  ipcMain.handle('statuses:setDefault', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return setDefaultStatus(database!, Number(id)) }))
+  ipcMain.handle('statuses:remove', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return removeStatus(database!, Number(id)) }))
+  ipcMain.handle('settings:get', () => toIpcResult(() => { requireSessionUser(); return getSettings(database!) }))
+  ipcMain.handle('settings:set', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    if (!input || typeof input !== 'object') throw new Error('INVALID_INPUT')
+    const value = input as Record<string, unknown>
+    if (typeof value.key !== 'string' || typeof value.value !== 'string') throw new Error('INVALID_INPUT')
+    setSetting(database!, value.key, value.value)
+    return { key: value.key, value: value.value }
+  }))
 })
 
 app.on('second-instance', () => mainWindow?.focus())
