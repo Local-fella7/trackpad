@@ -1,5 +1,6 @@
 {
   "name": "business-records",
+  "description": "Offline single-user Windows business records application.",
   "type": "module",
   "private": true,
   "version": "0.0.0",
