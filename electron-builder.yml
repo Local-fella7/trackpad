@@ -1,0 +1,24 @@
+appId: com.businessrecords.desktop
+productName: Business Records
+artifactName: BusinessRecords-Setup-${version}.exe
+directories:
+  output: release
+files:
+  - dist-electron/**
+  - .output/public/**
+  - package.json
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+npmRebuild: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Business Records
+  deleteAppDataOnUninstall: false

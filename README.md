@@ -1,4 +1,24 @@
-# Nuxt Minimal Starter
+# Business Records
+
+## Phase 0 technical proof
+
+This phase verifies the Windows desktop delivery path before business features are added. It proves that a static Nuxt interface can run in Electron, write to a local SQLite database, generate a PDF, and be packaged as a Windows installer.
+
+Run the desktop proof during development:
+
+```bash
+pnpm dev
+```
+
+Select **Run SQLite and PDF proof**. The app adds a row to its local proof database and writes `technical-proof.pdf` to `Documents/Business Records/Reports`.
+
+Build the installer:
+
+```bash
+pnpm dist
+```
+
+The installer is written to `release/`.
 
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 

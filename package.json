@@ -1,17 +1,35 @@
 {
-  "name": "trackpad",
+  "name": "business-records",
   "type": "module",
   "private": true,
+  "version": "0.0.0",
+  "main": "dist-electron/main.cjs",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
+    "build": "pnpm build:web && pnpm build:electron",
+    "build:web": "nuxt generate",
+    "build:electron": "tsup",
+    "typecheck:electron": "tsup --dts",
+    "dev": "concurrently -k \"pnpm dev:web\" \"pnpm dev:electron\"",
+    "dev:web": "nuxt dev",
+    "dev:electron": "wait-on tcp:3000 && tsup --watch --onSuccess \"electron .\"",
+    "dist": "pnpm build && electron-builder --win --x64",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "nuxt": "^4.6.3",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "concurrently": "^10.0.6",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3",
+    "wait-on": "^9.5.1"
   }
 }
