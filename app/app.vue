@@ -1,31 +1,12 @@
 <script setup lang="ts">
-const result = ref('Ready to verify the desktop toolchain.')
-const isDesktop = computed(() => typeof window !== 'undefined' && Boolean(window.desktopProof))
-
-async function runProof() {
-  if (!window.desktopProof) {
-    result.value = 'Open this app through Electron to run the proof.'
-    return
-  }
-
-  result.value = 'Creating a local database row and PDF…'
-  const proof = await window.desktopProof.run()
-  result.value = `Success: ${proof.recordCount} local row(s), PDF saved to ${proof.pdfPath}`
-}
+const result = ref('Ready.')
+const search = ref('')
+const rows = ref<Record<string, unknown>[]>([])
+const form = reactive({ recordDate: new Date().toISOString().slice(0, 10), clientName: '', statusId: 1, currency: 'TZS', taxRateBasisPoints: 0, items: [{ description: '', quantityX100: 100, unitPriceMinor: 0 }] })
+const total = computed(() => form.items.reduce((sum, item) => sum + Math.round(item.quantityX100 * item.unitPriceMinor / 100), 0))
+async function loadRecords() { if (!window.api) { result.value = 'Open through Electron and log in to manage records.'; return }; const response = await window.api.records.list({ search: search.value }); rows.value = (response.data ?? []) as Record<string, unknown>[] }
+function addItem() { form.items.push({ description: '', quantityX100: 100, unitPriceMinor: 0 }) }
+async function saveRecord() { if (!window.api || !form.clientName.trim()) { result.value = 'Client name is required.'; return }; const response = await window.api.records.create({ record: { ...form, items: undefined }, items: form.items }); result.value = response.ok ? 'Record saved.' : response.error?.message ?? 'Could not save record.'; if (response.ok) { form.clientName = ''; form.items = [{ description: '', quantityX100: 100, unitPriceMinor: 0 }]; await loadRecords() } }
 </script>
-
-<template>
-  <main>
-    <h1>Business Records</h1>
-    <p>Phase 0: desktop technical proof</p>
-    <button type="button" :disabled="!isDesktop" @click="runProof">
-      Run SQLite and PDF proof
-    </button>
-    <p aria-live="polite">{{ result }}</p>
-  </main>
-</template>
-
-<style>
-main { max-width: 44rem; margin: 5rem auto; font: 16px/1.5 system-ui, sans-serif; }
-button { padding: .75rem 1rem; font: inherit; cursor: pointer; }
-</style>
+<template><main class="shell"><header><h1>Business Records</h1><p>Records</p></header><section class="card"><label>Search <input v-model="search" placeholder="Client, record number, invoice" @keyup.enter="loadRecords"></label><AppButton @click="loadRecords">Search records</AppButton><table v-if="rows.length"><thead><tr><th>Date</th><th>Client</th><th>Total</th><th>Status</th></tr></thead><tbody><tr v-for="row in rows" :key="String(row.id)"><td>{{ row.record_date }}</td><td>{{ row.client_name }}</td><td>{{ row.grand_total_minor }} {{ row.currency }}</td><td>{{ row.status_name }}</td></tr></tbody></table></section><section class="card"><h2>New record</h2><label>Date <input v-model="form.recordDate" type="date"></label><label>Client name <input v-model="form.clientName" required></label><div v-for="(item, index) in form.items" :key="index" class="item"><input v-model="item.description" placeholder="Item or service"><input v-model.number="item.quantityX100" type="number" min="0" step="1"><input v-model.number="item.unitPriceMinor" type="number" min="0"></div><AppButton @click="addItem">Add item</AppButton><p>Grand total: {{ total }} {{ form.currency }}</p><AppButton @click="saveRecord">Save record</AppButton></section><p aria-live="polite">{{ result }}</p></main></template>
+<style>.shell{max-width:68rem;margin:3rem auto;padding:0 1rem}.card{display:grid;gap:1rem;margin:1rem 0;padding:1.25rem;background:white;border:1px solid #dce3ef;border-radius:.75rem}label{display:grid;gap:.35rem}input{padding:.55rem}.item{display:grid;grid-template-columns:2fr 1fr 1fr;gap:.5rem}table{border-collapse:collapse;width:100%}th,td{padding:.5rem;text-align:left;border-bottom:1px solid #e5e7eb}</style>

@@ -9,6 +9,8 @@ import { toIpcResult } from './errors'
 import { loginSchema, recoverSchema, setupSchema } from './schemas'
 import { openDatabase } from './db'
 import type Database from 'better-sqlite3'
+import { getRecord, listRecords, saveRecord, softDeleteRecord } from './db/repos/records'
+import { requireSessionUser } from './session'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -96,6 +98,19 @@ app.whenReady().then(() => {
   ipcMain.handle('auth:logout', () => toIpcResult(() => { logout(); return null }))
   ipcMain.handle('auth:touch', () => toIpcResult(() => { touchSession(); return getSessionUser() }))
   ipcMain.handle('auth:lockIfIdle', (_event, minutes: unknown) => toIpcResult(() => lockIfIdle(typeof minutes === 'number' ? minutes : 0)))
+  ipcMain.handle('records:list', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser(); return listRecords(database!, typeof input === 'object' && input && 'search' in input && typeof input.search === 'string' ? input.search : '')
+  }))
+  ipcMain.handle('records:get', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return getRecord(database!, Number(id)) }))
+  ipcMain.handle('records:create', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser(); const payload = input as { record: import('./db/repos/records').RecordInput; items: import('../shared/types').ItemInput[] }
+    return saveRecord(database!, null, payload.record, payload.items, user.id)
+  }))
+  ipcMain.handle('records:update', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser(); const payload = input as { id: number; record: import('./db/repos/records').RecordInput; items: import('../shared/types').ItemInput[] }
+    return saveRecord(database!, payload.id, payload.record, payload.items, user.id)
+  }))
+  ipcMain.handle('records:delete', (_event, id: unknown) => toIpcResult(() => softDeleteRecord(database!, Number(id), requireSessionUser().id)))
 })
 
 app.on('second-instance', () => mainWindow?.focus())

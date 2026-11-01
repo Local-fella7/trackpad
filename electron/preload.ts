@@ -14,4 +14,11 @@ contextBridge.exposeInMainWorld('api', {
     touch: () => ipcRenderer.invoke('auth:touch'),
     lockIfIdle: (minutes: number) => ipcRenderer.invoke('auth:lockIfIdle', minutes),
   },
+  records: {
+    list: (input?: unknown) => ipcRenderer.invoke('records:list', input),
+    get: (id: number) => ipcRenderer.invoke('records:get', id),
+    create: (input: unknown) => ipcRenderer.invoke('records:create', input),
+    update: (input: unknown) => ipcRenderer.invoke('records:update', input),
+    remove: (id: number) => ipcRenderer.invoke('records:delete', id),
+  },
 })

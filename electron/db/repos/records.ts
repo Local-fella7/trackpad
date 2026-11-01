@@ -25,3 +25,24 @@ export function saveRecord(db: Database.Database, id: number | null, input: Reco
     return recordId
   })()
 }
+
+export function listRecords(db: Database.Database, search = '', limit = 50, offset = 0) {
+  const term = `%${search.trim()}%`
+  return db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color
+    FROM records r JOIN statuses s ON s.id = r.status_id
+    WHERE r.deleted_at IS NULL AND (r.client_name LIKE ? COLLATE NOCASE OR r.record_number LIKE ? COLLATE NOCASE OR r.invoice_no LIKE ? COLLATE NOCASE)
+    ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(term, term, term, limit, offset)
+}
+
+export function getRecord(db: Database.Database, id: number) {
+  const record = db.prepare('SELECT * FROM records WHERE id = ? AND deleted_at IS NULL').get(id)
+  if (!record) return null
+  const items = db.prepare('SELECT * FROM record_items WHERE record_id = ? ORDER BY line_no').all(id)
+  return { record, items }
+}
+
+export function softDeleteRecord(db: Database.Database, id: number, userId: number | null) {
+  const result = db.prepare("UPDATE records SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL").run(id)
+  if (result.changes) writeAudit(db, userId, 'record.delete', 'record', id, {})
+  return result.changes
+}
