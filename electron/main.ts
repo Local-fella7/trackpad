@@ -100,8 +100,9 @@ app.whenReady().then(() => {
     const recoveryKey = createRecoveryKey()
     const [passwordHash, recoveryHash] = await Promise.all([hashSecret(password), hashSecret(recoveryKey)])
     const result = database.prepare('INSERT INTO users (username, display_name, password_hash, recovery_hash) VALUES (?, ?, ?, ?)').run(username.trim(), displayName.trim(), passwordHash, recoveryHash)
-    login({ id: Number(result.lastInsertRowid), username: username.trim(), displayName: displayName.trim() })
-    return { recoveryKey }
+    const sessionUser = { id: Number(result.lastInsertRowid), username: username.trim(), displayName: displayName.trim() }
+    login(sessionUser)
+    return { recoveryKey, user: sessionUser }
   }))
   ipcMain.handle('auth:login', (_event, input: unknown) => toIpcResult(async () => {
     if (!database || typeof input !== 'object' || input === null) throw new Error('INVALID_INPUT')
