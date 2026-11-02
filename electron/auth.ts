@@ -1,16 +1,19 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { promisify } from 'node:util'
 
-export function hashSecret(secret: string): string {
+const scrypt = promisify(scryptCallback)
+
+export async function hashSecret(secret: string): Promise<string> {
   const salt = randomBytes(16)
-  const hash = scryptSync(secret.normalize('NFKC'), salt, 64)
+  const hash = await scrypt(secret.normalize('NFKC'), salt, 64) as Buffer
   return `${salt.toString('hex')}:${hash.toString('hex')}`
 }
 
-export function verifySecret(secret: string, stored: string): boolean {
+export async function verifySecret(secret: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(':')
   if (!saltHex || !hashHex) return false
   const expected = Buffer.from(hashHex, 'hex')
-  const actual = scryptSync(secret.normalize('NFKC'), Buffer.from(saltHex, 'hex'), expected.length)
+  const actual = await scrypt(secret.normalize('NFKC'), Buffer.from(saltHex, 'hex'), expected.length) as Buffer
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 

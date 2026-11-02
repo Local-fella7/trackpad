@@ -93,33 +93,35 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('auth:status', () => toIpcResult(() => ({ hasUser: Boolean(database?.prepare('SELECT 1 FROM users LIMIT 1').get()), user: getSessionUser() })))
-  ipcMain.handle('auth:setup', (_event, input: unknown) => toIpcResult(() => {
+  ipcMain.handle('auth:setup', (_event, input: unknown) => toIpcResult(async () => {
     if (!database || typeof input !== 'object' || input === null) throw new Error('INVALID_INPUT')
     if (database.prepare('SELECT 1 FROM users LIMIT 1').get()) throw new Error('SETUP_ALREADY_COMPLETE')
     const { username, displayName, password } = setupSchema.parse(input)
     const recoveryKey = createRecoveryKey()
-    const result = database.prepare('INSERT INTO users (username, display_name, password_hash, recovery_hash) VALUES (?, ?, ?, ?)').run(username.trim(), displayName.trim(), hashSecret(password), hashSecret(recoveryKey))
+    const [passwordHash, recoveryHash] = await Promise.all([hashSecret(password), hashSecret(recoveryKey)])
+    const result = database.prepare('INSERT INTO users (username, display_name, password_hash, recovery_hash) VALUES (?, ?, ?, ?)').run(username.trim(), displayName.trim(), passwordHash, recoveryHash)
     login({ id: Number(result.lastInsertRowid), username: username.trim(), displayName: displayName.trim() })
     return { recoveryKey }
   }))
-  ipcMain.handle('auth:login', (_event, input: unknown) => toIpcResult(() => {
+  ipcMain.handle('auth:login', (_event, input: unknown) => toIpcResult(async () => {
     if (!database || typeof input !== 'object' || input === null) throw new Error('INVALID_INPUT')
     const { username, password } = loginSchema.parse(input)
     assertLoginAllowed(username)
     const user = database.prepare('SELECT id, username, display_name, password_hash FROM users WHERE username = ? COLLATE NOCASE').get(username.trim()) as { id: number; username: string; display_name: string; password_hash: string } | undefined
-    if (!user || !verifySecret(password, user.password_hash)) { recordLoginFailure(username); throw new Error('INVALID_CREDENTIALS') }
+    if (!user || !await verifySecret(password, user.password_hash)) { recordLoginFailure(username); throw new Error('INVALID_CREDENTIALS') }
     const sessionUser = { id: user.id, username: user.username, displayName: user.display_name }
     login(sessionUser)
     clearLoginFailures(username)
     return sessionUser
   }))
-  ipcMain.handle('auth:recover', (_event, input: unknown) => toIpcResult(() => {
+  ipcMain.handle('auth:recover', (_event, input: unknown) => toIpcResult(async () => {
     if (!database) throw new Error('INVALID_INPUT')
     const { username, recoveryKey, newPassword } = recoverSchema.parse(input)
     const user = database.prepare('SELECT id, recovery_hash FROM users WHERE username = ? COLLATE NOCASE').get(username) as { id: number; recovery_hash: string } | undefined
-    if (!user || !verifySecret(recoveryKey, user.recovery_hash)) throw new Error('INVALID_CREDENTIALS')
+    if (!user || !await verifySecret(recoveryKey, user.recovery_hash)) throw new Error('INVALID_CREDENTIALS')
     const newRecoveryKey = createRecoveryKey()
-    database.prepare('UPDATE users SET password_hash = ?, recovery_hash = ? WHERE id = ?').run(hashSecret(newPassword), hashSecret(newRecoveryKey), user.id)
+    const [passwordHash, recoveryHash] = await Promise.all([hashSecret(newPassword), hashSecret(newRecoveryKey)])
+    database.prepare('UPDATE users SET password_hash = ?, recovery_hash = ? WHERE id = ?').run(passwordHash, recoveryHash, user.id)
     return { recoveryKey: newRecoveryKey }
   }))
   ipcMain.handle('auth:logout', () => toIpcResult(() => { logout(); return null }))
