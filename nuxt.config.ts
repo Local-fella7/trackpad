@@ -4,9 +4,8 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
-  css: ['~/assets/css/main.css'],
   app: {
-    baseURL: './',
+    baseURL: '/',
     buildAssetsDir: 'assets/',
   },
   router: {
@@ -16,5 +15,8 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: 'static',
+    prerender: {
+      routes: ['/'],
+    },
   },
 })

@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { createRecoveryKey, hashSecret, verifySecret } from './auth'
 import { getSessionUser, lockIfIdle, login, logout, touchSession } from './session'
 import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from './login-attempts'
@@ -22,6 +23,24 @@ import { copyFileSync, existsSync } from 'node:fs'
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
 let database: Database.Database | null = null
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'app',
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+}])
+
+function registerStaticFileProtocol() {
+  const staticRoot = path.resolve(app.getAppPath(), '.output', 'public')
+
+  protocol.handle('app', (request) => {
+    const pathname = decodeURIComponent(new URL(request.url).pathname)
+    const filePath = path.resolve(staticRoot, `.${pathname}`)
+    if (filePath !== staticRoot && !filePath.startsWith(`${staticRoot}${path.sep}`)) {
+      return new Response('Not found', { status: 404 })
+    }
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -45,7 +64,7 @@ function createWindow() {
   if (isDevelopment) {
     void mainWindow.loadURL('http://localhost:3000')
   } else {
-    void mainWindow.loadFile(path.join(app.getAppPath(), '.output', 'public', 'index.html'))
+    void mainWindow.loadURL('app://business-records/index.html')
   }
 }
 
@@ -56,6 +75,7 @@ app.whenReady().then(() => {
   }
 
   database = openDatabase(app.getPath('userData'))
+  registerStaticFileProtocol()
   createWindow()
 
   ipcMain.handle('proof:run', async () => {
