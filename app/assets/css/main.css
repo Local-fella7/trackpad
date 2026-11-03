@@ -1,4 +1,21 @@
-:root { font-family: system-ui, sans-serif; color: #172033; background: #f6f8fc; }
+@import '@fontsource-variable/inter';
+
+:root {
+  --brand:       #43766C;
+  --brand-dark:  #2d504a;
+  --cream:       #F8FAE5;
+  --tan:         #B19470;
+  --rust:        #76453B;
+  --card:        #FFFFFF;
+  --border:      #E5DDD0;
+  --text:        #2C2016;
+  --muted:       #7A6B5A;
+
+  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  color: var(--text);
+  background: var(--cream);
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, select, textarea { font: inherit; }
