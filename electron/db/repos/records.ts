@@ -20,9 +20,27 @@ export function saveRecord(db: Database.Database, id: number | null, input: Reco
       : (db.prepare('UPDATE records SET record_date=?, record_number=?, client_name=?, contacts=?, location=?, source_of_info=?, proforma_no=?, invoice_no=?, event_date=?, order_form_no=?, delivery_form_no=?, status_id=?, currency=?, tax_rate_bp=?, subtotal_minor=?, tax_minor=?, grand_total_minor=?, notes=?, updated_at=datetime(\'now\') WHERE id=? AND deleted_at IS NULL').run(...values, id), id)
     db.prepare('DELETE FROM record_items WHERE record_id = ?').run(recordId)
     const insertItem = db.prepare('INSERT INTO record_items (record_id, line_no, description, quantity_x100, unit_price_minor, line_total_minor) VALUES (?, ?, ?, ?, ?, ?)')
-    items.forEach((item, index) => insertItem.run(recordId, index + 1, item.description.trim(), item.quantityX100, item.unitPriceMinor, Math.round(item.quantityX100 * item.unitPriceMinor / 100)))
+    items.forEach((item, index) => insertItem.run(recordId, index + 1, item.description.trim(), item.quantity * 100, item.unitPrice, item.quantity * item.unitPrice))
     writeAudit(db, userId, id === null ? 'record.create' : 'record.update', 'record', recordId, { input, itemCount: items.length })
     return recordId
+  })()
+}
+
+export function nextRecordNumber(db: Database.Database) {
+  const rows = db.prepare("SELECT record_number FROM records WHERE record_number GLOB 'REC-[0-9]*'").all() as { record_number: string }[]
+  const highest = rows.reduce((max, row) => Math.max(max, Number(row.record_number.slice(4)) || 0), 0)
+  return `REC-${String(highest + 1).padStart(4, '0')}`
+}
+
+export function legacyRecordCount(db: Database.Database) {
+  return (db.prepare('SELECT COUNT(*) AS count FROM records').get() as { count: number }).count
+}
+
+export function clearRecords(db: Database.Database) {
+  return db.transaction(() => {
+    db.prepare('DELETE FROM record_items').run()
+    db.prepare("DELETE FROM audit_log WHERE entity = 'record'").run()
+    return db.prepare('DELETE FROM records').run().changes
   })()
 }
 

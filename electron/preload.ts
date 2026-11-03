@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('api', {
   records: {
     list: (input?: unknown) => ipcRenderer.invoke('records:list', input),
     get: (id: number) => ipcRenderer.invoke('records:get', id),
+    nextNumber: () => ipcRenderer.invoke('records:nextNumber'),
+    legacyStatus: () => ipcRenderer.invoke('records:legacyStatus'),
+    clearLegacy: () => ipcRenderer.invoke('records:clearLegacy'),
+    keepLegacy: () => ipcRenderer.invoke('records:keepLegacy'),
     create: (input: unknown) => ipcRenderer.invoke('records:create', input),
     update: (input: unknown) => ipcRenderer.invoke('records:update', input),
     remove: (id: number) => ipcRenderer.invoke('records:delete', id),

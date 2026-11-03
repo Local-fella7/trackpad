@@ -10,7 +10,7 @@ import { toIpcResult } from './errors'
 import { loginSchema, recoverSchema, setupSchema } from './schemas'
 import { openDatabase } from './db'
 import type Database from 'better-sqlite3'
-import { getRecord, listRecords, saveRecord, softDeleteRecord } from './db/repos/records'
+import { clearRecords, getRecord, legacyRecordCount, listRecords, nextRecordNumber, saveRecord, softDeleteRecord } from './db/repos/records'
 import { requireSessionUser } from './session'
 import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultStatus, updateStatus } from './db/repos/statuses'
 import { getSettings, setSetting } from './db/repos/settings'
@@ -132,6 +132,19 @@ app.whenReady().then(() => {
     requireSessionUser(); return listRecords(database!, typeof input === 'object' && input && 'search' in input && typeof input.search === 'string' ? input.search : '')
   }))
   ipcMain.handle('records:get', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return getRecord(database!, Number(id)) }))
+  ipcMain.handle('records:nextNumber', () => toIpcResult(() => { requireSessionUser(); return nextRecordNumber(database!) }))
+  ipcMain.handle('records:legacyStatus', () => toIpcResult(() => {
+    requireSessionUser()
+    const settings = getSettings(database!)
+    return { count: legacyRecordCount(database!), decided: settings.record_model_upgrade_decided === 'true' }
+  }))
+  ipcMain.handle('records:clearLegacy', () => toIpcResult(() => {
+    requireSessionUser()
+    const deleted = clearRecords(database!)
+    setSetting(database!, 'record_model_upgrade_decided', 'true')
+    return deleted
+  }))
+  ipcMain.handle('records:keepLegacy', () => toIpcResult(() => { requireSessionUser(); setSetting(database!, 'record_model_upgrade_decided', 'true'); return true }))
   ipcMain.handle('records:create', (_event, input: unknown) => toIpcResult(() => {
     const user = requireSessionUser(); const payload = input as { record: import('./db/repos/records').RecordInput; items: import('../shared/types').ItemInput[] }
     return saveRecord(database!, null, payload.record, payload.items, user.id)
