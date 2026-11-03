@@ -10,12 +10,12 @@ import { toIpcResult } from './errors'
 import { loginSchema, recoverSchema, setupSchema } from './schemas'
 import { openDatabase } from './db'
 import type Database from 'better-sqlite3'
-import { clearRecords, getRecord, legacyRecordCount, listRecords, nextRecordNumber, saveRecord, softDeleteRecord } from './db/repos/records'
+import { clearRecords, getRecord, legacyRecordCount, listRecords, nextRecordNumber, saveRecord, softDeleteRecord, updateWorkflow } from './db/repos/records'
 import { requireSessionUser } from './session'
 import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultStatus, updateStatus } from './db/repos/statuses'
 import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
-import { getReportData, type ReportType } from './reports'
+import { getReportData, reportTypes, type ReportType, type ReportParams } from './reports'
 import { exportExcel, exportPdf } from './report-export'
 import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
 import { copyFileSync, existsSync } from 'node:fs'
@@ -129,7 +129,7 @@ app.whenReady().then(() => {
   ipcMain.handle('auth:touch', () => toIpcResult(() => { touchSession(); return getSessionUser() }))
   ipcMain.handle('auth:lockIfIdle', (_event, minutes: unknown) => toIpcResult(() => lockIfIdle(typeof minutes === 'number' ? minutes : 0)))
   ipcMain.handle('records:list', (_event, input: unknown) => toIpcResult(() => {
-    requireSessionUser(); return listRecords(database!, typeof input === 'object' && input && 'search' in input && typeof input.search === 'string' ? input.search : '')
+    requireSessionUser(); const value=input as {search?:unknown;filter?:unknown}; return listRecords(database!, typeof value?.search === 'string' ? value.search : '', typeof value?.filter === 'string' ? value.filter : '')
   }))
   ipcMain.handle('records:get', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return getRecord(database!, Number(id)) }))
   ipcMain.handle('records:nextNumber', () => toIpcResult(() => { requireSessionUser(); return nextRecordNumber(database!) }))
@@ -154,6 +154,7 @@ app.whenReady().then(() => {
     return saveRecord(database!, payload.id, payload.record, payload.items, user.id)
   }))
   ipcMain.handle('records:delete', (_event, id: unknown) => toIpcResult(() => softDeleteRecord(database!, Number(id), requireSessionUser().id)))
+  ipcMain.handle('records:workflow', (_event, input: unknown) => toIpcResult(() => { const value=input as {id?:unknown;stage?:unknown;enabled?:unknown}; if (!value || !Number.isInteger(value.id) || !['confirmed','paid','delivered'].includes(String(value.stage)) || typeof value.enabled !== 'boolean') throw new Error('INVALID_INPUT'); return updateWorkflow(database!, value.id as number, value.stage as 'confirmed'|'paid'|'delivered', value.enabled, requireSessionUser().id) }))
   ipcMain.handle('statuses:list', () => toIpcResult(() => { requireSessionUser(); return listStatuses(database!) }))
   ipcMain.handle('statuses:create', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()
@@ -179,19 +180,20 @@ app.whenReady().then(() => {
     setSetting(database!, value.key, value.value)
     return { key: value.key, value: value.value }
   }))
-  ipcMain.handle('dashboard:data', () => toIpcResult(() => {
+  ipcMain.handle('dashboard:data', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()
-    return getDashboardData(database!, new Date().toISOString().slice(0, 10))
+    const days = typeof (input as { days?: unknown })?.days === 'number' ? (input as { days: number }).days : 30
+    return getDashboardData(database!, new Date().toISOString().slice(0, 10), days)
   }))
   ipcMain.handle('reports:data', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()
     if (!input || typeof input !== 'object') throw new Error('INVALID_INPUT')
-    const value = input as { type?: string; params?: { day?: string; month?: string; days?: number } }
-    if (value.type !== 'daily' && value.type !== 'monthly' && value.type !== 'upcoming-events') throw new Error('INVALID_INPUT')
+    const value = input as { type?: string; params?: ReportParams }
+    if (!reportTypes.includes(value.type as ReportType)) throw new Error('INVALID_INPUT')
     return getReportData(database!, value.type as ReportType, value.params ?? {})
   }))
   ipcMain.handle('reports:exportExcel', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportExcel(mainWindow, report as { period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
-  ipcMain.handle('reports:exportPdf', (_event, name: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || typeof name !== 'string') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, name) }))
+  ipcMain.handle('reports:exportPdf', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, report as { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   const backupDirectory = path.join(app.getPath('userData'), 'backups')
   const makeBackup = async () => {
     const file = await createBackup(database!, backupDirectory)

@@ -14,6 +14,15 @@ const nullable = (value?: string) => value?.trim() || null
 export function saveRecord(db: Database.Database, id: number | null, input: RecordInput, items: readonly ItemInput[], userId: number | null) {
   return db.transaction(() => {
     const totals = calculateTotals(items, input.taxRateBasisPoints)
+    if (!input.clientName.trim() || !input.recordDate || !items.length || items.some(item => !item.description.trim() || item.quantity <= 0 || item.unitPrice < 0)) throw new Error('INVALID_RECORD')
+    const existing = id === null ? undefined : db.prepare('SELECT * FROM records WHERE id = ? AND deleted_at IS NULL').get(id) as Record<string, unknown> | undefined
+    if (id !== null && !existing) throw new Error('INVALID_INPUT')
+    if (existing?.paid_at) {
+      const locked = ['record_date', 'client_name', 'contacts', 'location', 'source_of_info', 'proforma_no', 'invoice_no', 'event_date', 'order_form_no', 'delivery_form_no', 'status_id', 'currency', 'tax_rate_bp', 'subtotal_minor', 'tax_minor', 'grand_total_minor']
+      const prior = { record_date: existing.record_date, client_name: existing.client_name, contacts: existing.contacts, location: existing.location, source_of_info: existing.source_of_info, proforma_no: existing.proforma_no, invoice_no: existing.invoice_no, event_date: existing.event_date, order_form_no: existing.order_form_no, delivery_form_no: existing.delivery_form_no, status_id: existing.status_id, currency: existing.currency, tax_rate_bp: existing.tax_rate_bp, subtotal_minor: existing.subtotal_minor, tax_minor: existing.tax_minor, grand_total_minor: existing.grand_total_minor }
+      const next = { record_date: input.recordDate, client_name: input.clientName.trim(), contacts: nullable(input.contacts), location: nullable(input.location), source_of_info: nullable(input.sourceOfInfo), proforma_no: nullable(input.proformaNo), invoice_no: nullable(input.invoiceNo), event_date: nullable(input.eventDate), order_form_no: nullable(input.orderFormNo), delivery_form_no: nullable(input.deliveryFormNo), status_id: input.statusId, currency: input.currency, tax_rate_bp: input.taxRateBasisPoints, subtotal_minor: totals.subtotal, tax_minor: totals.tax, grand_total_minor: totals.grandTotal }
+      if (locked.some(key => prior[key as keyof typeof prior] !== next[key as keyof typeof next]) || JSON.stringify(db.prepare('SELECT description, quantity_x100, unit_price_minor FROM record_items WHERE record_id=? ORDER BY line_no').all(id)) !== JSON.stringify(items.map(item => ({ description: item.description.trim(), quantity_x100: item.quantity * 100, unit_price_minor: item.unitPrice })))) throw new Error('PAID_RECORD_LOCKED')
+    }
     const values = [input.recordDate, nullable(input.recordNumber), input.clientName.trim(), nullable(input.contacts), nullable(input.location), nullable(input.sourceOfInfo), nullable(input.proformaNo), nullable(input.invoiceNo), nullable(input.eventDate), nullable(input.orderFormNo), nullable(input.deliveryFormNo), input.statusId, input.currency, input.taxRateBasisPoints, totals.subtotal, totals.tax, totals.grandTotal, nullable(input.notes)]
     const recordId = id === null
       ? Number(db.prepare('INSERT INTO records (record_date, record_number, client_name, contacts, location, source_of_info, proforma_no, invoice_no, event_date, order_form_no, delivery_form_no, status_id, currency, tax_rate_bp, subtotal_minor, tax_minor, grand_total_minor, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(...values).lastInsertRowid)
@@ -44,12 +53,30 @@ export function clearRecords(db: Database.Database) {
   })()
 }
 
-export function listRecords(db: Database.Database, search = '', limit = 50, offset = 0) {
+export function listRecords(db: Database.Database, search = '', filter = '', limit = 50, offset = 0) {
   const term = `%${search.trim()}%`
+  const workflow = filter === 'unpaid' ? "AND r.invoice_no IS NOT NULL AND r.invoice_no <> '' AND r.paid_at IS NULL" : filter === 'delivery' ? "AND r.confirmed_at IS NOT NULL AND r.delivered_at IS NULL AND (r.delivery_form_no IS NULL OR r.delivery_form_no = '') AND r.event_date <= date('now', '+3 days')" : filter.startsWith('status:') ? `AND s.name = '${filter.slice(7).replace(/'/g, "''")}'` : ''
   return db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color
     FROM records r JOIN statuses s ON s.id = r.status_id
     WHERE r.deleted_at IS NULL AND (r.client_name LIKE ? COLLATE NOCASE OR r.record_number LIKE ? COLLATE NOCASE OR r.invoice_no LIKE ? COLLATE NOCASE)
-    ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(term, term, term, limit, offset)
+    ${workflow} ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(term, term, term, limit, offset)
+}
+
+export function updateWorkflow(db: Database.Database, id: number, stage: 'confirmed'|'paid'|'delivered', enabled: boolean, userId: number | null) {
+  const column = `${stage}_at`
+  const record = db.prepare('SELECT * FROM records WHERE id = ? AND deleted_at IS NULL').get(id) as Record<string, unknown> | undefined
+  if (!record) throw new Error('INVALID_INPUT')
+  if (enabled && stage === 'confirmed') {
+    const item = db.prepare('SELECT COUNT(*) AS count FROM record_items WHERE record_id = ? AND description <> "" AND quantity_x100 > 0 AND unit_price_minor >= 0').get(id) as { count: number }
+    if (!String(record.client_name ?? '').trim() || !record.record_date || !record.event_date || !item.count || Number(record.grand_total_minor) <= 0) throw new Error('CONFIRMATION_REQUIREMENTS')
+  }
+  if (enabled && stage === 'paid' && !record.confirmed_at) throw new Error('CONFIRM_BEFORE_PAYMENT')
+  if (enabled && stage === 'delivered' && !record.paid_at) throw new Error('PAY_BEFORE_DELIVERY')
+  if (!enabled && stage === 'confirmed' && (record.paid_at || record.delivered_at)) throw new Error('CLEAR_LATER_STAGES_FIRST')
+  if (!enabled && stage === 'paid' && record.delivered_at) throw new Error('CLEAR_LATER_STAGES_FIRST')
+  db.prepare(`UPDATE records SET ${column} = ?, updated_at = datetime('now') WHERE id = ?`).run(enabled ? new Date().toISOString() : null, id)
+  writeAudit(db, userId, `record.${stage}.${enabled ? 'set' : 'clear'}`, 'record', id, {})
+  return true
 }
 
 export function getRecord(db: Database.Database, id: number) {

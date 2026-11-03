@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('api', {
     create: (input: unknown) => ipcRenderer.invoke('records:create', input),
     update: (input: unknown) => ipcRenderer.invoke('records:update', input),
     remove: (id: number) => ipcRenderer.invoke('records:delete', id),
+    workflow: (input: unknown) => ipcRenderer.invoke('records:workflow', input),
   },
   statuses: {
     list: () => ipcRenderer.invoke('statuses:list'),
@@ -37,7 +38,7 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (input: unknown) => ipcRenderer.invoke('settings:set', input),
   },
-  dashboard: { data: () => ipcRenderer.invoke('dashboard:data') },
-  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (name: string) => ipcRenderer.invoke('reports:exportPdf', name) },
+  dashboard: { data: (input?: unknown) => ipcRenderer.invoke('dashboard:data', input) },
+  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', report) },
   backup: { now: () => ipcRenderer.invoke('backup:now'), list: () => ipcRenderer.invoke('backup:list'), health: () => ipcRenderer.invoke('backup:health'), restore: (file: string) => ipcRenderer.invoke('backup:restore', file) },
 })

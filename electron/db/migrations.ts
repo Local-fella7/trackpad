@@ -78,4 +78,14 @@ export const migrations = [
     INSERT INTO settings (key, value) VALUES
       ('currency', 'TZS'), ('tax_rate_bp', '0'), ('language', 'en'), ('autolock_minutes', '0');
   `,
+  `
+    ALTER TABLE records ADD COLUMN confirmed_at TEXT;
+    ALTER TABLE records ADD COLUMN paid_at TEXT;
+    ALTER TABLE records ADD COLUMN delivered_at TEXT;
+    UPDATE records SET confirmed_at = updated_at WHERE status_id IN (SELECT id FROM statuses WHERE name IN ('Confirmed','Paid','Delivered'));
+    UPDATE records SET paid_at = updated_at WHERE status_id IN (SELECT id FROM statuses WHERE name IN ('Paid','Delivered'));
+    UPDATE records SET delivered_at = updated_at WHERE status_id IN (SELECT id FROM statuses WHERE name = 'Delivered');
+    CREATE INDEX idx_records_paid ON records(paid_at);
+    CREATE INDEX idx_records_delivery_ready ON records(confirmed_at, delivered_at, event_date);
+  `,
 ]
