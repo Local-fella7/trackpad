@@ -3,7 +3,7 @@
   "description": "Offline single-user Windows business records application.",
   "type": "module",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "build": "pnpm build:web && pnpm build:electron",

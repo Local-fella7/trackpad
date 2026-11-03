@@ -12,5 +12,6 @@ export function getDashboardData(db: Database.Database, today: string, activityD
   const deliveryCount = (db.prepare("SELECT COUNT(*) AS count FROM records WHERE deleted_at IS NULL AND confirmed_at IS NOT NULL AND delivered_at IS NULL AND (delivery_form_no IS NULL OR delivery_form_no = '') AND event_date <= date(?, '+3 days')").get(today) as {count:number}).count
   const range = Math.max(7, Math.min(activityDays, 90))
   const eventActivity = db.prepare("SELECT event_date, COALESCE(SUM(grand_total_minor),0) AS total FROM records WHERE deleted_at IS NULL AND confirmed_at IS NOT NULL AND paid_at IS NOT NULL AND event_date BETWEEN date(?, '-' || ? || ' days') AND ? GROUP BY event_date ORDER BY event_date").all(today, range - 1, today)
-  return { recordsToday, activeRecords, monthSummary, byStatus, upcomingEvents, unpaidCount, deliveryCount, eventActivity, activityDays: range }
+  const last30Days = db.prepare(`SELECT record_date, COUNT(*) AS count FROM records WHERE deleted_at IS NULL AND record_date BETWEEN date(?, '-29 days') AND ? GROUP BY record_date ORDER BY record_date`).all(today, today)
+  return { recordsToday, activeRecords, monthSummary, byStatus, upcomingEvents, unpaidCount, deliveryCount, eventActivity, activityDays: range, last30Days }
 }
