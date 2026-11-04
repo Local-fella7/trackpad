@@ -3,7 +3,7 @@
   "description": "Offline single-user Windows business records application.",
   "type": "module",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.2.0",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "build": "pnpm build:web && pnpm build:electron",
@@ -30,6 +30,7 @@
     "lucide-vue-next": "^1.0.0",
     "nuxt": "^4.6.3",
     "pinia": "^4.1.0",
+    "sweetalert2": "^11.26.25",
     "tailwindcss": "^4.3.3",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0",

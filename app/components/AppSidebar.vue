@@ -26,10 +26,10 @@ const emit = defineEmits<{
       </div>
     </div>
 
-    <!-- New Record CTA -->
+    <!-- New Order CTA -->
     <button class="new-btn" @click="emit('new-record')">
       <span class="plus">+</span>
-      <span>New Record</span>
+      <span>New Order</span>
     </button>
 
     <!-- Navigation -->
@@ -40,7 +40,7 @@ const emit = defineEmits<{
       </button>
       <button :class="{ active: page === 'records' }" @click="emit('navigate', 'records')">
         <FileText :size="18" />
-        <span>Records</span>
+        <span>Orders</span>
       </button>
       <button :class="{ active: page === 'reports' }" @click="emit('navigate', 'reports')">
         <BarChart3 :size="18" />
@@ -116,7 +116,7 @@ const emit = defineEmits<{
   text-transform: none;
 }
 
-/* New Record Button */
+/* New Order Button */
 .new-btn {
   display: flex;
   align-items: center;

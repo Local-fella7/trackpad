@@ -88,4 +88,17 @@ export const migrations = [
     CREATE INDEX idx_records_paid ON records(paid_at);
     CREATE INDEX idx_records_delivery_ready ON records(confirmed_at, delivered_at, event_date);
   `,
+  `
+    CREATE TABLE IF NOT EXISTS payments (
+      id INTEGER PRIMARY KEY,
+      record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      amount_minor INTEGER NOT NULL CHECK (amount_minor >= 0),
+      payment_date TEXT NOT NULL,
+      method TEXT,
+      reference TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_payments_record ON payments(record_id);
+  `,
 ]

@@ -19,6 +19,7 @@ import { getReportData, reportTypes, type ReportType, type ReportParams } from '
 import { exportExcel, exportPdf } from './report-export'
 import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
 import { copyFileSync, existsSync } from 'node:fs'
+import { addPayment, deletePayment, listBilling, listPayments } from './db/repos/payments'
 
 const isDevelopment = !app.isPackaged
 let mainWindow: BrowserWindow | null = null
@@ -155,6 +156,14 @@ app.whenReady().then(() => {
   }))
   ipcMain.handle('records:delete', (_event, id: unknown) => toIpcResult(() => softDeleteRecord(database!, Number(id), requireSessionUser().id)))
   ipcMain.handle('records:workflow', (_event, input: unknown) => toIpcResult(() => { const value=input as {id?:unknown;stage?:unknown;enabled?:unknown}; if (!value || !Number.isInteger(value.id) || !['confirmed','paid','delivered'].includes(String(value.stage)) || typeof value.enabled !== 'boolean') throw new Error('INVALID_INPUT'); return updateWorkflow(database!, value.id as number, value.stage as 'confirmed'|'paid'|'delivered', value.enabled, requireSessionUser().id) }))
+  ipcMain.handle('billing:list', () => toIpcResult(() => { requireSessionUser(); return listBilling(database!) }))
+  ipcMain.handle('billing:payments', (_event, recordId: unknown) => toIpcResult(() => { requireSessionUser(); return listPayments(database!, Number(recordId)) }))
+  ipcMain.handle('billing:add', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser(); const value=input as Record<string,unknown>|null
+    if (!value || !Number.isInteger(value.recordId) || !Number.isInteger(value.amountMinor) || typeof value.paymentDate !== 'string') throw new Error('INVALID_INPUT')
+    return addPayment(database!, {recordId:Number(value.recordId),amountMinor:Number(value.amountMinor),paymentDate:value.paymentDate,method:typeof value.method==='string'?value.method:undefined,reference:typeof value.reference==='string'?value.reference:undefined,notes:typeof value.notes==='string'?value.notes:undefined})
+  }))
+  ipcMain.handle('billing:delete', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return deletePayment(database!, Number(id)) }))
   ipcMain.handle('statuses:list', () => toIpcResult(() => { requireSessionUser(); return listStatuses(database!) }))
   ipcMain.handle('statuses:create', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()

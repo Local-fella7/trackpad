@@ -38,6 +38,12 @@ contextBridge.exposeInMainWorld('api', {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (input: unknown) => ipcRenderer.invoke('settings:set', input),
   },
+  billing: {
+    list: () => ipcRenderer.invoke('billing:list'),
+    payments: (recordId: number) => ipcRenderer.invoke('billing:payments', recordId),
+    add: (input: unknown) => ipcRenderer.invoke('billing:add', input),
+    remove: (id: number) => ipcRenderer.invoke('billing:delete', id),
+  },
   dashboard: { data: (input?: unknown) => ipcRenderer.invoke('dashboard:data', input) },
   reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', report) },
   backup: { now: () => ipcRenderer.invoke('backup:now'), list: () => ipcRenderer.invoke('backup:list'), health: () => ipcRenderer.invoke('backup:health'), restore: (file: string) => ipcRenderer.invoke('backup:restore', file) },
