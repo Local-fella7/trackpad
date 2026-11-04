@@ -1,9 +1,9 @@
 {
-  "name": "business-records",
-  "description": "Offline single-user Windows business records application.",
+  "name": "trackpad",
+  "description": "Offline single-user Windows order management application.",
   "type": "module",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "build": "pnpm build:web && pnpm build:electron",

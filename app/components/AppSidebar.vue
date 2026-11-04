@@ -19,10 +19,10 @@ const emit = defineEmits<{
   <aside class="sidebar">
     <!-- Brand -->
     <div class="brand">
-      <span class="logo-mark">BR</span>
+      <span class="logo-mark">TP</span>
       <div class="brand-text">
-        <span>BUSINESS</span>
-        <strong>RECORDS</strong>
+        <span>TRACKPAD</span>
+        <strong>TRACKPAD</strong>
       </div>
     </div>
 

@@ -16,6 +16,7 @@ export function addPayment(db: Database.Database, input: PaymentInput) {
     .run(input.recordId,input.amountMinor,input.paymentDate,input.method?.trim()||null,input.reference?.trim()||null,input.notes?.trim()||null)
   const total = paid.total + input.amountMinor
   if (total >= record.grand_total_minor) db.prepare('UPDATE records SET paid_at=COALESCE(paid_at,datetime("now")),updated_at=datetime("now") WHERE id=?').run(input.recordId)
+  db.prepare("INSERT INTO audit_log (action,entity,entity_id,details) VALUES ('payment.recorded','record',?,?)").run(input.recordId,JSON.stringify({paymentId:Number(result.lastInsertRowid),amountMinor:input.amountMinor,paymentDate:input.paymentDate}))
   return Number(result.lastInsertRowid)
 }
 
@@ -26,6 +27,7 @@ export function deletePayment(db: Database.Database, paymentId: number) {
   const record = db.prepare('SELECT grand_total_minor FROM records WHERE id=?').get(payment.record_id) as {grand_total_minor:number}
   const paid = db.prepare('SELECT COALESCE(SUM(amount_minor),0) AS total FROM payments WHERE record_id=?').get(payment.record_id) as {total:number}
   if (paid.total < record.grand_total_minor) db.prepare('UPDATE records SET paid_at=NULL,updated_at=datetime("now") WHERE id=?').run(payment.record_id)
+  db.prepare("INSERT INTO audit_log (action,entity,entity_id,details) VALUES ('payment.deleted','record',?,?)").run(payment.record_id,JSON.stringify({paymentId}))
 }
 
 export function listBilling(db: Database.Database) {

@@ -49,6 +49,7 @@ function createWindow() {
     height: 700,
     minWidth: 900,
     minHeight: 600,
+    title: 'Trackpad',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -65,7 +66,7 @@ function createWindow() {
   if (isDevelopment) {
     void mainWindow.loadURL('http://localhost:3000')
   } else {
-    void mainWindow.loadURL('app://business-records/index.html')
+    void mainWindow.loadURL('app://trackpad/index.html')
   }
 }
 
@@ -84,7 +85,7 @@ app.whenReady().then(() => {
 
     database.prepare('INSERT INTO proof_runs DEFAULT VALUES').run()
     const row = database.prepare('SELECT COUNT(*) AS count FROM proof_runs').get() as { count: number }
-    const reportsDirectory = path.join(app.getPath('documents'), 'Business Records', 'Reports')
+    const reportsDirectory = path.join(app.getPath('documents'), 'Trackpad', 'Reports')
     mkdirSync(reportsDirectory, { recursive: true })
     const pdfPath = path.join(reportsDirectory, 'technical-proof.pdf')
     const pdf = await mainWindow.webContents.printToPDF({ pageSize: 'A4', printBackground: true })

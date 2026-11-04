@@ -55,8 +55,12 @@ export function clearRecords(db: Database.Database) {
 
 export function listRecords(db: Database.Database, search = '', filter = '', limit = 50, offset = 0) {
   const term = `%${search.trim()}%`
-  const workflow = filter === 'unpaid' ? "AND r.invoice_no IS NOT NULL AND r.invoice_no <> '' AND r.paid_at IS NULL" : filter === 'delivery' ? "AND r.confirmed_at IS NOT NULL AND r.delivered_at IS NULL AND (r.delivery_form_no IS NULL OR r.delivery_form_no = '') AND r.event_date <= date('now', '+3 days')" : filter.startsWith('status:') ? `AND s.name = '${filter.slice(7).replace(/'/g, "''")}'` : ''
-  return db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color
+  const workflow = filter === 'unpaid' ? "AND r.grand_total_minor>COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)" : filter === 'delivery' ? "AND r.confirmed_at IS NOT NULL AND r.delivered_at IS NULL AND (r.delivery_form_no IS NULL OR r.delivery_form_no = '') AND r.event_date <= date('now', '+3 days')" : filter.startsWith('status:') ? `AND s.name = '${filter.slice(7).replace(/'/g, "''")}'` : ''
+  return db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color,
+    COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0) AS paid_minor,
+    CASE WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)<=0 THEN 'Pending'
+         WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)<r.grand_total_minor THEN 'Partially Paid'
+         ELSE 'Fully Paid' END AS payment_status
     FROM records r JOIN statuses s ON s.id = r.status_id
     WHERE r.deleted_at IS NULL AND (r.client_name LIKE ? COLLATE NOCASE OR r.record_number LIKE ? COLLATE NOCASE OR r.invoice_no LIKE ? COLLATE NOCASE)
     ${workflow} ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(term, term, term, limit, offset)

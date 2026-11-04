@@ -1,6 +1,6 @@
-appId: com.businessrecords.desktop
-productName: Business Records
-artifactName: BusinessRecords-Setup-${version}.exe
+appId: com.trackpad.desktop
+productName: Trackpad
+artifactName: Trackpad-Setup-${version}.exe
 directories:
   output: release
 files:
@@ -20,5 +20,5 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: Business Records
+  shortcutName: Trackpad
   deleteAppDataOnUninstall: false

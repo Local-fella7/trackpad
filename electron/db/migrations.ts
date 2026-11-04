@@ -101,4 +101,16 @@ export const migrations = [
     );
     CREATE INDEX IF NOT EXISTS idx_payments_record ON payments(record_id);
   `,
+  `
+    UPDATE records SET status_id = (SELECT id FROM statuses WHERE LOWER(name)='confirmed')
+      WHERE status_id IN (SELECT id FROM statuses WHERE LOWER(name) IN ('paid','delivered','proforma sent','invoiced'));
+    UPDATE statuses SET is_active=0 WHERE LOWER(name) NOT IN ('pending','confirmed','cancelled');
+    INSERT OR IGNORE INTO statuses (name,color,sort_order,is_default,is_active,exclude_from_totals)
+      SELECT 'Pending','#d97706',1,1,1,0 WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(name)='pending');
+    INSERT OR IGNORE INTO statuses (name,color,sort_order,is_default,is_active,exclude_from_totals)
+      SELECT 'Confirmed','#0ea5e9',2,0,1,0 WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(name)='confirmed');
+    INSERT OR IGNORE INTO statuses (name,color,sort_order,is_default,is_active,exclude_from_totals)
+      SELECT 'Cancelled','#dc2626',3,0,1,1 WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(name)='cancelled');
+    UPDATE records SET status_id = (SELECT id FROM statuses WHERE LOWER(name)='pending') WHERE status_id IN (SELECT id FROM statuses WHERE LOWER(name) NOT IN ('pending','confirmed','cancelled') AND is_active=0);
+  `,
 ]

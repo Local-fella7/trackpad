@@ -1,4 +1,4 @@
-# Business Records
+# Trackpad
 
 ## Phase 0 technical proof
 
@@ -10,7 +10,7 @@ Run the desktop proof during development:
 pnpm dev
 ```
 
-Select **Run SQLite and PDF proof**. The app adds a row to its local proof database and writes `technical-proof.pdf` to `Documents/Business Records/Reports`.
+Select **Run SQLite and PDF proof**. The app adds a row to its local proof database and writes `technical-proof.pdf` to `Documents/Trackpad/Reports`.
 
 Build the installer:
 
