@@ -34,8 +34,12 @@ export async function exportPdf(window: MainWindow, report: Report) {
   const suggestedName = `Trackpad_${report.period.replaceAll(/[^a-z0-9_-]/gi, '-')}`
   const choice = await dialog.showSaveDialog(window, { defaultPath: path.join(reportsDirectory, `${suggestedName}.pdf`), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
   if (choice.canceled || !choice.filePath) return null
-  const headers = Object.keys(report.rows[0] ?? {})
-  const widths = headers.map(key => key.includes('name') || key.includes('title') ? 24 : key.includes('number') ? 14 : key.includes('total') || key.includes('amount') ? 16 : 12)
+  const allHeaders = Object.keys(report.rows[0] ?? report.summary[0] ?? {})
+  const preferred = ['record_number', 'client_name', 'record_date', 'event_date', 'status_name', 'grand_total_minor', 'paid_minor', 'payment_status', 'invoice_no', 'location']
+  const headers = preferred.filter(key => allHeaders.includes(key)).concat(
+    allHeaders.filter(key => !preferred.includes(key) && !['id', 'status_id', 'currency', 'deleted_at', 'created_at', 'updated_at'].includes(key)).slice(0, 5),
+  )
+  const widths = headers.map(key => key.includes('name') || key.includes('title') ? 20 : key.includes('number') ? 13 : 100 / Math.max(headers.length, 1))
   const formatNumber = (value: unknown) => new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(value || 0))
   const formatCell = (key: string, value: unknown) => key.includes('minor') || key.includes('total') || key.includes('amount') ? `${formatNumber(value)} TZS` : String(value ?? '—')
   const summaryHtml = report.summary.map(item => `<div><b>${escapeHtml(item.status_name ?? item.client_name ?? 'Total')}</b><br>${escapeHtml(item.records ?? 0)} orders · <b>${escapeHtml(formatNumber(item.total_minor ?? item.grand_total_minor))} TZS</b></div>`).join('')

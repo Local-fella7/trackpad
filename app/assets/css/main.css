@@ -1,11 +1,12 @@
 @import '@fontsource-variable/inter';
+@import 'bootstrap/dist/css/bootstrap.min.css';
 
 :root {
-  --brand:       #43766C;
-  --brand-dark:  #2d504a;
-  --cream:       #F8FAE5;
-  --tan:         #B19470;
-  --rust:        #76453B;
+  --brand:       #147d58;
+  --brand-dark:  #0f5d42;
+  --cream:       #f4f7f6;
+  --tan:         #b19470;
+  --rust:        #76453b;
   --card:        #FFFFFF;
   --border:      #E5DDD0;
   --text:        #2C2016;
