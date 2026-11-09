@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+function serializeReport(report: unknown) {
+  const json = JSON.stringify(report)
+  if (json === undefined) throw new TypeError('Report data could not be serialized.')
+  return JSON.parse(json)
+}
+
 contextBridge.exposeInMainWorld('desktopProof', {
   run: () => ipcRenderer.invoke('proof:run'),
 })
@@ -45,6 +51,6 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id: number) => ipcRenderer.invoke('billing:delete', id),
   },
   dashboard: { data: (input?: unknown) => ipcRenderer.invoke('dashboard:data', input) },
-  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', report), print: (report: unknown) => ipcRenderer.invoke('reports:print', report), openFolder: (file: string) => ipcRenderer.invoke('reports:openFolder', file) },
+  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', serializeReport(report)), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', serializeReport(report)), print: (report: unknown) => ipcRenderer.invoke('reports:print', serializeReport(report)), openFolder: (file: string) => ipcRenderer.invoke('reports:openFolder', file) },
   backup: { now: () => ipcRenderer.invoke('backup:now'), list: () => ipcRenderer.invoke('backup:list'), health: () => ipcRenderer.invoke('backup:health'), restore: (file: string) => ipcRenderer.invoke('backup:restore', file) },
 })
