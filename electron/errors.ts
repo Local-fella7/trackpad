@@ -11,6 +11,7 @@ export function asIpcError(error: unknown): IpcError {
     NOT_LOGGED_IN: 'Please log in to continue.',
     PDF_EXPORT_FAILED: 'Could not create the PDF report. Please try again.',
     PDF_WRITE_FAILED: 'The PDF file could not be saved.',
+    REPORT_RENDER_FAILED: 'The report could not be prepared for PDF or printing.',
     PRINT_FAILED: 'The report could not be sent to the printer.',
     REPORT_FILE_NOT_FOUND: 'The saved report could not be found.',
   }

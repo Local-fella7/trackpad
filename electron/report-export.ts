@@ -47,8 +47,12 @@ function buildReportHtml(report: Report) {
 
 async function createReportWindow(parent: MainWindow, report: Report, visible = false) {
   const reportWindow = new BrowserWindow({ parent, show: false, width: 1050, height: 760, title: report.title ?? 'Trackpad Report', webPreferences: { sandbox: true } })
-  await reportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildReportHtml(report))}`)
-  await new Promise<void>(resolve => setTimeout(resolve, 200))
+  try {
+    await reportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildReportHtml(report))}`)
+  } catch {
+    reportWindow.destroy()
+    throw new Error('REPORT_RENDER_FAILED')
+  }
   if (visible) { reportWindow.show(); reportWindow.focus() }
   return reportWindow
 }
@@ -65,7 +69,7 @@ export async function exportPdf(window: MainWindow, report: Report) {
     if (bytes === 0) throw new Error('PDF_WRITE_FAILED')
     return { path: filePath, bytes }
   } catch (error) {
-    if (error instanceof Error && error.message === 'PDF_WRITE_FAILED') throw error
+    if (error instanceof Error && ['PDF_WRITE_FAILED', 'REPORT_RENDER_FAILED'].includes(error.message)) throw error
     throw new Error('PDF_EXPORT_FAILED')
   } finally { reportWindow.destroy() }
 }
