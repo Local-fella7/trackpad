@@ -59,17 +59,29 @@ async function createReportWindow(parent: MainWindow, report: Report, visible = 
 
 export async function exportPdf(window: MainWindow, report: Report) {
   const directory = reportsDirectory()
-  await mkdir(directory, { recursive: true })
+  try {
+    await mkdir(directory, { recursive: true })
+  } catch (error) {
+    console.error('[reports] Could not create the reports directory:', error)
+    throw new Error('REPORT_STORAGE_FAILED')
+  }
   const filePath = path.join(directory, `Trackpad_${report.period.replaceAll(/[^a-z0-9_-]/gi, '-')}_${timestamp()}.pdf`)
   const reportWindow = await createReportWindow(window, report)
   try {
     const pdf = await reportWindow.webContents.printToPDF({ pageSize: 'A4', landscape: true, printBackground: true, margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    await writeFile(filePath, pdf)
+    if (pdf.length < 5 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('PDF_RENDER_FAILED')
+    try {
+      await writeFile(filePath, pdf)
+    } catch (error) {
+      console.error('[reports] Could not write the PDF file:', error)
+      throw new Error('PDF_WRITE_FAILED')
+    }
     const bytes = (await stat(filePath)).size
-    if (bytes === 0) throw new Error('PDF_WRITE_FAILED')
+    if (bytes < 5) throw new Error('PDF_WRITE_FAILED')
     return { path: filePath, bytes }
   } catch (error) {
-    if (error instanceof Error && ['PDF_WRITE_FAILED', 'REPORT_RENDER_FAILED'].includes(error.message)) throw error
+    if (error instanceof Error && ['PDF_WRITE_FAILED', 'PDF_RENDER_FAILED', 'REPORT_RENDER_FAILED'].includes(error.message)) throw error
+    console.error('[reports] PDF generation failed:', error)
     throw new Error('PDF_EXPORT_FAILED')
   } finally { reportWindow.destroy() }
 }
