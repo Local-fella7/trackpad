@@ -16,7 +16,7 @@ import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultSt
 import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
 import { getReportData, reportTypes, type ReportType, type ReportParams } from './reports'
-import { exportExcel, exportPdf } from './report-export'
+import { exportExcel, exportPdf, printReport } from './report-export'
 import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
 import { copyFileSync, existsSync } from 'node:fs'
 import { addPayment, deletePayment, listBilling, listPayments } from './db/repos/payments'
@@ -131,7 +131,13 @@ app.whenReady().then(() => {
   ipcMain.handle('auth:touch', () => toIpcResult(() => { touchSession(); return getSessionUser() }))
   ipcMain.handle('auth:lockIfIdle', (_event, minutes: unknown) => toIpcResult(() => lockIfIdle(typeof minutes === 'number' ? minutes : 0)))
   ipcMain.handle('records:list', (_event, input: unknown) => toIpcResult(() => {
-    requireSessionUser(); const value=input as {search?:unknown;filter?:unknown}; return listRecords(database!, typeof value?.search === 'string' ? value.search : '', typeof value?.filter === 'string' ? value.filter : '')
+    requireSessionUser()
+    const value = input as Record<string, unknown> | null
+    return listRecords(database!, {
+      search: typeof value?.search === 'string' ? value.search : '', filter: typeof value?.filter === 'string' ? value.filter : '',
+      dateFrom: typeof value?.dateFrom === 'string' ? value.dateFrom : '', dateTo: typeof value?.dateTo === 'string' ? value.dateTo : '',
+      status: typeof value?.status === 'string' ? value.status : '', page: typeof value?.page === 'number' ? value.page : 1, pageSize: typeof value?.pageSize === 'number' ? value.pageSize : 25,
+    })
   }))
   ipcMain.handle('records:get', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return getRecord(database!, Number(id)) }))
   ipcMain.handle('records:nextNumber', () => toIpcResult(() => { requireSessionUser(); return nextRecordNumber(database!) }))
@@ -204,6 +210,7 @@ app.whenReady().then(() => {
   }))
   ipcMain.handle('reports:exportExcel', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportExcel(mainWindow, report as { period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   ipcMain.handle('reports:exportPdf', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, report as { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
+  ipcMain.handle('reports:print', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return printReport(report as { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   const backupDirectory = path.join(app.getPath('userData'), 'backups')
   const makeBackup = async () => {
     const file = await createBackup(database!, backupDirectory)

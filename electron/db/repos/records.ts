@@ -53,17 +53,31 @@ export function clearRecords(db: Database.Database) {
   })()
 }
 
-export function listRecords(db: Database.Database, search = '', filter = '', limit = 50, offset = 0) {
+export type RecordListOptions = { search?: string; filter?: string; dateFrom?: string; dateTo?: string; status?: string; page?: number; pageSize?: number }
+
+export function listRecords(db: Database.Database, options: RecordListOptions = {}) {
+  const search = options.search ?? ''
+  const filter = options.filter ?? ''
+  const pageSize = Math.max(10, Math.min(Number(options.pageSize) || 25, 100))
+  const page = Math.max(1, Number(options.page) || 1)
+  const offset = (page - 1) * pageSize
   const term = `%${search.trim()}%`
   const workflow = filter === 'unpaid' ? "AND r.grand_total_minor>COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)" : filter === 'delivery' ? "AND r.confirmed_at IS NOT NULL AND r.delivered_at IS NULL AND (r.delivery_form_no IS NULL OR r.delivery_form_no = '') AND r.event_date <= date('now', '+3 days')" : filter.startsWith('status:') ? `AND s.name = '${filter.slice(7).replace(/'/g, "''")}'` : ''
-  return db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color,
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(options.dateFrom ?? '') ? options.dateFrom : ''
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(options.dateTo ?? '') ? options.dateTo : ''
+  const status = options.status?.trim() ?? ''
+  const conditions = `WHERE r.deleted_at IS NULL AND (r.client_name LIKE ? COLLATE NOCASE OR r.record_number LIKE ? COLLATE NOCASE OR r.invoice_no LIKE ? COLLATE NOCASE)
+    ${dateFrom ? 'AND r.record_date >= ?' : ''} ${dateTo ? 'AND r.record_date <= ?' : ''} ${status ? 'AND s.name = ?' : ''} ${workflow}`
+  const params = [term, term, term, ...(dateFrom ? [dateFrom] : []), ...(dateTo ? [dateTo] : []), ...(status ? [status] : [])]
+  const total = (db.prepare(`SELECT COUNT(*) AS count FROM records r JOIN statuses s ON s.id = r.status_id ${conditions}`).get(...params) as { count: number }).count
+  const rows = db.prepare(`SELECT r.*, s.name AS status_name, s.color AS status_color,
     COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0) AS paid_minor,
     CASE WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)<=0 THEN 'Pending'
          WHEN COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)<r.grand_total_minor THEN 'Partially Paid'
          ELSE 'Fully Paid' END AS payment_status
     FROM records r JOIN statuses s ON s.id = r.status_id
-    WHERE r.deleted_at IS NULL AND (r.client_name LIKE ? COLLATE NOCASE OR r.record_number LIKE ? COLLATE NOCASE OR r.invoice_no LIKE ? COLLATE NOCASE)
-    ${workflow} ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(term, term, term, limit, offset)
+    ${conditions} ORDER BY r.record_date DESC, r.id DESC LIMIT ? OFFSET ?`).all(...params, pageSize, offset)
+  return { rows, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) }
 }
 
 export function updateWorkflow(db: Database.Database, id: number, stage: 'confirmed'|'paid'|'delivered', enabled: boolean, userId: number | null) {
