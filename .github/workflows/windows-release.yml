@@ -17,8 +17,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      ELECTRON_CACHE: ${{ runner.temp }}\electron-cache
-      ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\electron-builder-cache
+      ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.cache\electron-builder
       ELECTRON_BUILDER_BINARIES_MIRROR: https://cdn.npmmirror.com/binaries/electron-builder-binaries/
 
     steps:
@@ -41,8 +41,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${{ runner.temp }}\electron-cache
-            ${{ runner.temp }}\electron-builder-cache
+            ${{ github.workspace }}\.cache\electron
+            ${{ github.workspace }}\.cache\electron-builder
           key: ${{ runner.os }}-electron-tools-${{ hashFiles('pnpm-lock.yaml', 'electron-builder.yml') }}
           restore-keys: |
             ${{ runner.os }}-electron-tools-
