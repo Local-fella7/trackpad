@@ -20,6 +20,7 @@ jobs:
       ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.cache\electron-builder
       ELECTRON_BUILDER_BINARIES_MIRROR: https://cdn.npmmirror.com/binaries/electron-builder-binaries/
+      DEBUG: electron-builder
 
     steps:
       - name: Check out source
@@ -57,18 +58,31 @@ jobs:
         shell: pwsh
         run: |
           $attemptLimit = 3
+          $buildLog = Join-Path $env:GITHUB_WORKSPACE 'windows-build.log'
+          Remove-Item -LiteralPath $buildLog -ErrorAction SilentlyContinue
           for ($attempt = 1; $attempt -le $attemptLimit; $attempt++) {
-            pnpm dist
-            if ($LASTEXITCODE -eq 0) {
+            "--- Installer build attempt $attempt of $attemptLimit ---" | Tee-Object -FilePath $buildLog -Append
+            pnpm dist *>&1 | Tee-Object -FilePath $buildLog -Append
+            $exitCode = $LASTEXITCODE
+            if ($exitCode -eq 0) {
               exit 0
             }
             if ($attempt -eq $attemptLimit) {
               Write-Error "Windows installer build failed after $attemptLimit attempts."
-              exit $LASTEXITCODE
+              exit $exitCode
             }
             Write-Warning "Installer build attempt $attempt failed; retrying in 30 seconds."
             Start-Sleep -Seconds 30
           }
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Trackpad-Build-Log-${{ github.sha }}
+          path: windows-build.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
