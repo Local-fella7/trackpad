@@ -19,6 +19,7 @@ jobs:
     env:
       ELECTRON_CACHE: ${{ runner.temp }}\electron-cache
       ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\electron-builder-cache
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://cdn.npmmirror.com/binaries/electron-builder-binaries/
 
     steps:
       - name: Check out source
