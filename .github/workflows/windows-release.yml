@@ -16,6 +16,9 @@ jobs:
     name: Build Windows installer
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      ELECTRON_CACHE: ${{ runner.temp }}\electron-cache
+      ELECTRON_BUILDER_CACHE: ${{ runner.temp }}\electron-builder-cache
 
     steps:
       - name: Check out source
@@ -33,6 +36,16 @@ jobs:
           corepack prepare pnpm@10.28.1 --activate
           pnpm --version
 
+      - name: Restore Electron build tool cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}\electron-cache
+            ${{ runner.temp }}\electron-builder-cache
+          key: ${{ runner.os }}-electron-tools-${{ hashFiles('pnpm-lock.yaml', 'electron-builder.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-tools-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -40,7 +53,21 @@ jobs:
         run: pnpm test
 
       - name: Build Windows installer
-        run: pnpm dist
+        shell: pwsh
+        run: |
+          $attemptLimit = 3
+          for ($attempt = 1; $attempt -le $attemptLimit; $attempt++) {
+            pnpm dist
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+            if ($attempt -eq $attemptLimit) {
+              Write-Error "Windows installer build failed after $attemptLimit attempts."
+              exit $LASTEXITCODE
+            }
+            Write-Warning "Installer build attempt $attempt failed; retrying in 30 seconds."
+            Start-Sleep -Seconds 30
+          }
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
