@@ -45,6 +45,6 @@ contextBridge.exposeInMainWorld('api', {
     remove: (id: number) => ipcRenderer.invoke('billing:delete', id),
   },
   dashboard: { data: (input?: unknown) => ipcRenderer.invoke('dashboard:data', input) },
-  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', report), print: (report: unknown) => ipcRenderer.invoke('reports:print', report) },
+  reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', report), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', report), print: (report: unknown) => ipcRenderer.invoke('reports:print', report), openFolder: (file: string) => ipcRenderer.invoke('reports:openFolder', file) },
   backup: { now: () => ipcRenderer.invoke('backup:now'), list: () => ipcRenderer.invoke('backup:list'), health: () => ipcRenderer.invoke('backup:health'), restore: (file: string) => ipcRenderer.invoke('backup:restore', file) },
 })

@@ -9,6 +9,10 @@ export function asIpcError(error: unknown): IpcError {
     LOGIN_THROTTLED: 'Too many attempts. Please wait 30 seconds and try again.',
     SETUP_ALREADY_COMPLETE: 'A user has already been created.',
     NOT_LOGGED_IN: 'Please log in to continue.',
+    PDF_EXPORT_FAILED: 'Could not create the PDF report. Please try again.',
+    PDF_WRITE_FAILED: 'The PDF file could not be saved.',
+    PRINT_FAILED: 'The report could not be sent to the printer.',
+    REPORT_FILE_NOT_FOUND: 'The saved report could not be found.',
   }
   return { code, message: messages[code] ?? 'Something went wrong. Please try again.' }
 }

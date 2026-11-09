@@ -1,108 +1,31 @@
 <script setup lang="ts">
-defineProps<{ report: any; type: string; day: string; month: string; days: number }>()
-const emit = defineEmits<{
-  preview: []
-  excel: []
-  pdf: []
-  print: []
-  'update:type': [v: string]
-  'update:day': [v: string]
-  'update:month': [v: string]
-  'update:days': [v: number]
-}>()
+import { BarChart3, CalendarDays, Download, FileSpreadsheet, FileText, FolderOpen, LoaderCircle, Printer, RefreshCw, WalletCards } from 'lucide-vue-next'
 
+defineProps<{ report: any; type: string; day: string; month: string; days: number; busyAction: string; savedPath: string }>()
+const emit = defineEmits<{ preview: []; excel: []; pdf: []; print: []; 'open-folder': []; 'update:type': [v: string]; 'update:day': [v: string]; 'update:month': [v: string]; 'update:days': [v: number] }>()
 const types = [
-  ['daily', 'Daily report'],
-  ['monthly', 'Monthly report'],
-  ['upcoming-events', 'Upcoming events'],
-  ['unpaid-invoices', 'Unpaid invoices'],
-  ['delivery-due', 'Delivery due'],
-  ['status-summary', 'Status summary'],
-  ['client-summary', 'Client summary'],
+  ['daily', 'Daily report', 'Orders created on one date'], ['monthly', 'Monthly report', 'Orders and value for a month'], ['upcoming-events', 'Upcoming events', 'Events in the next period'], ['unpaid-invoices', 'Outstanding invoices', 'Balances that need follow-up'], ['delivery-due', 'Delivery due', 'Paid work ready for delivery'], ['status-summary', 'Status summary', 'Current workload by status'], ['client-summary', 'Client summary', 'Order value by client'],
 ]
 const money = (n: number) => `${new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(n) || 0)} TZS`
-const label = (key: string) => key.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())
-const preferred = ['record_number', 'client_name', 'record_date', 'event_date', 'status_name', 'grand_total_minor', 'paid_minor', 'payment_status', 'invoice_no', 'location']
-const columns = (report: any) => {
-  const keys = Object.keys(report?.rows?.[0] || report?.summary?.[0] || {})
-  return preferred.filter(key => keys.includes(key)).concat(
-    keys.filter(key => !preferred.includes(key) && !['id', 'status_id', 'currency', 'deleted_at', 'created_at', 'updated_at'].includes(key)).slice(0, 5),
-  )
-}
+const label = (key: string) => key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase())
+const columns = (report: any) => { const keys = Object.keys(report?.rows?.[0] || report?.summary?.[0] || {}); const preferred = ['record_number', 'client_name', 'record_date', 'event_date', 'status_name', 'grand_total_minor', 'paid_minor', 'payment_status', 'invoice_no', 'location']; return preferred.filter(key => keys.includes(key)).concat(keys.filter(key => !preferred.includes(key) && !['id', 'status_id', 'currency', 'deleted_at', 'created_at', 'updated_at'].includes(key)).slice(0, 5)) }
+const iconFor = (value: string) => value === 'unpaid-invoices' ? WalletCards : value.includes('summary') ? BarChart3 : value === 'monthly' ? CalendarDays : FileText
 </script>
 
 <template>
-  <div class="reports-layout">
-    <section class="report-controls card">
-      <div class="controls-heading">
-        <div><span class="eyebrow">Report builder</span><h2>Configure report</h2></div>
-      </div>
-      <label class="form-label">Report type
-        <select class="form-select" :value="type" @change="emit('update:type', ($event.target as HTMLSelectElement).value)">
-          <option v-for="item in types" :key="item[0]" :value="item[0]">{{ item[1] }}</option>
-        </select>
-      </label>
-      <label v-if="type === 'daily'" class="form-label">Date
-        <input class="form-control" :value="day" type="date" @input="emit('update:day', ($event.target as HTMLInputElement).value)">
-      </label>
-      <label v-if="type === 'monthly'" class="form-label">Month
-        <input class="form-control" :value="month" type="month" @input="emit('update:month', ($event.target as HTMLInputElement).value)">
-      </label>
-      <label v-if="type === 'upcoming-events'" class="form-label">Days ahead
-        <input class="form-control" :value="days" type="number" min="1" max="365" @input="emit('update:days', Number(($event.target as HTMLInputElement).value))">
-      </label>
-      <button class="btn btn-brand w-100" @click="emit('preview')">Preview report</button>
-    </section>
-
-    <section v-if="report" class="report-preview card">
-      <header class="report-header">
-        <div>
-          <span class="eyebrow">Preview</span>
-          <h1>{{ report.title || report.type.replaceAll('-', ' ') }}</h1>
-          <p>{{ report.period }}</p>
-        </div>
-        <div class="report-actions">
-          <button class="btn btn-outline-secondary" @click="emit('print')">Print</button>
-          <button class="btn btn-outline-secondary" @click="emit('excel')">Excel</button>
-          <button class="btn btn-brand" @click="emit('pdf')">Save PDF</button>
-        </div>
-      </header>
-
-      <div v-if="report.summary?.length" class="summary-grid">
-        <article v-for="(item, index) in report.summary" :key="index">
-          <span>{{ item.status_name || item.client_name || 'Total' }}</span>
-          <strong>{{ money(item.total_minor ?? item.grand_total_minor) }}</strong>
-          <small>{{ item.records || 0 }} order{{ item.records === 1 ? '' : 's' }}</small>
-        </article>
-      </div>
-
-      <div class="report-table-wrap">
-        <table class="table report-table align-middle">
-          <thead><tr><th v-for="key in columns(report)" :key="key">{{ label(key) }}</th></tr></thead>
-          <tbody>
-            <tr v-for="(row, index) in report.rows" :key="row.id || index">
-              <td v-for="key in columns(report)" :key="key">
-                {{ String(key.includes('minor') ? money(Number(row[key])) : row[key] ?? '—') }}
-              </td>
-            </tr>
-            <tr v-if="!report.rows?.length"><td :colspan="columns(report).length" class="empty-table">No records match this report.</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <footer class="report-footer">
-        <span>Trackpad Report</span>
-        <span>Generated {{ new Date().toLocaleString() }}</span>
-      </footer>
-    </section>
-
-    <section v-else class="report-preview card empty-preview">
-      <span class="selection-icon">PDF</span>
-      <h2>No report selected</h2>
-      <p>Configure the report and select “Preview report” to generate it.</p>
-    </section>
-  </div>
+  <section class="reports-shell">
+    <header class="reports-hero"><div><span class="eyebrow">Reporting centre</span><h2>Turn your order data into action</h2><p>Generate, print, or save professional reports without leaving Trackpad.</p></div><button class="btn btn-brand" :disabled="Boolean(busyAction)" @click="emit('preview')"><RefreshCw :size="16" :class="{ spinning: busyAction === 'preview' }" /> {{ busyAction === 'preview' ? 'Generating...' : 'Generate report' }}</button></header>
+    <div class="reports-layout">
+      <aside class="builder-card"><div class="section-title"><FileText :size="17" /><div><span class="eyebrow">Step 1</span><h3>Choose a report</h3></div></div><div class="report-types"><button v-for="item in types" :key="item[0]" :class="{ active: type === item[0] }" @click="emit('update:type', item[0])"><component :is="iconFor(item[0])" :size="17" /><span><b>{{ item[1] }}</b><small>{{ item[2] }}</small></span></button></div><div class="parameters"><span class="eyebrow">Step 2</span><label v-if="type === 'daily'">Report date<input class="form-control" :value="day" type="date" @change="emit('update:day', ($event.target as HTMLInputElement).value)"></label><label v-else-if="type === 'monthly'">Report month<input class="form-control" :value="month" type="month" @change="emit('update:month', ($event.target as HTMLInputElement).value)"></label><label v-else-if="type === 'upcoming-events'">Days ahead<input class="form-control" :value="days" type="number" min="1" max="365" @change="emit('update:days', Number(($event.target as HTMLInputElement).value))"></label><p v-else>Uses your current order data.</p></div></aside>
+      <main class="preview-card"><template v-if="report"><header class="preview-header"><div><span class="eyebrow">Report ready</span><h1>{{ report.title || label(report.type) }}</h1><p>{{ report.period }} · {{ report.rows?.length || 0 }} records</p></div><div class="report-actions"><button class="btn btn-light" :disabled="Boolean(busyAction)" title="Print report" @click="emit('print')"><Printer :size="16" /> {{ busyAction === 'print' ? 'Opening printer...' : 'Print' }}</button><button class="btn btn-light" :disabled="Boolean(busyAction)" title="Save Excel report" @click="emit('excel')"><FileSpreadsheet :size="16" /> Excel</button><button class="btn btn-brand" :disabled="Boolean(busyAction)" title="Save PDF report" @click="emit('pdf')"><Download :size="16" /> {{ busyAction === 'pdf' ? 'Saving PDF...' : 'Save PDF' }}</button></div></header>
+        <div v-if="savedPath" class="save-success"><FileText :size="19" /><span><b>Report saved successfully</b><small>{{ savedPath }}</small></span><button class="btn btn-sm btn-light" @click="emit('open-folder')"><FolderOpen :size="15" /> Open folder</button></div>
+        <div v-if="report.summary?.length" class="summary-grid"><article v-for="(item, index) in report.summary" :key="index"><span>{{ item.status_name || item.client_name || 'Total' }}</span><strong>{{ money(item.total_minor ?? item.grand_total_minor) }}</strong><small>{{ item.records || 0 }} order{{ item.records === 1 ? '' : 's' }}</small></article></div>
+        <div class="table-heading"><h3>Report details</h3><span>All values are in Tanzanian shillings</span></div><div class="table-responsive report-table-wrap"><table class="table report-table align-middle"><thead><tr><th v-for="key in columns(report)" :key="key">{{ label(key) }}</th></tr></thead><tbody><tr v-for="(row, index) in report.rows" :key="row.id || index"><td v-for="key in columns(report)" :key="key">{{ key.includes('minor') ? money(Number(row[key])) : row[key] ?? '-' }}</td></tr><tr v-if="!report.rows?.length"><td :colspan="columns(report).length" class="empty-table">No records match this report.</td></tr></tbody></table></div><footer>Trackpad Report · Generated {{ new Date().toLocaleString() }}</footer></template>
+        <div v-else class="empty-preview"><span><FileText :size="30" /></span><h2>Your report preview will appear here</h2><p>Select a report type and choose Generate report.</p></div>
+      </main>
+    </div>
+  </section>
 </template>
 
 <style scoped>
-.reports-layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:18px}.card{border:1px solid #e5e9e7;border-radius:14px;background:#fff;box-shadow:0 8px 24px rgba(16,29,50,.04)}.report-controls{padding:20px;height:max-content}.controls-heading{border-bottom:1px solid #edf0ee;margin-bottom:18px;padding-bottom:14px}.controls-heading h2{font-size:19px;margin:4px 0}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#6f7b76}.report-controls .form-label{width:100%;margin-bottom:14px;font-size:12px;font-weight:800}.btn-brand{border:1px solid #147d58;background:#147d58;color:#fff;font-weight:800;border-radius:8px}.btn-brand:hover{background:#0f6848;border-color:#0f6848}.report-preview{min-height:560px;overflow:hidden}.report-header{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 24px;border-bottom:1px solid #edf0ee}.report-header h1{font-size:22px;margin:4px 0 2px}.report-header p{margin:0;color:#7b8580;font-size:13px}.report-actions{display:flex;gap:8px}.report-actions .btn{font-size:12px;font-weight:800;border-radius:8px}.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:18px 24px}.summary-grid article{border-radius:9px;background:#f7faf8;border:1px solid #edf0ee;padding:13px}.summary-grid span,.summary-grid small{display:block;color:#6f7b76}.summary-grid span{font-size:11px}.summary-grid strong{display:block;margin:6px 0;font-size:15px}.summary-grid small{font-size:10px}.report-table-wrap{padding:0 24px 18px}.report-table{font-size:12px}.report-table thead th{background:#147d58;color:#fff;border:0;text-transform:uppercase;font-size:9px;letter-spacing:.04em;padding:10px 12px}.report-table td{border-color:#edf0ee;padding:10px 12px}.empty-table{text-align:center;color:#8a938f;padding:50px!important}.report-footer{border-top:1px solid #edf0ee;padding:12px 24px;display:flex;justify-content:space-between;color:#8a938f;font-size:10px}.empty-preview{min-height:560px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.selection-icon{width:64px;height:64px;border-radius:50%;background:#edf5f1;color:#147d58;display:grid;place-items:center;font-weight:900}.empty-preview h2{font-size:20px;margin-top:12px}.empty-preview p{color:#7b8580}@media(max-width:900px){.reports-layout{grid-template-columns:1fr}.report-preview{min-height:420px}.report-controls{position:static}}@media print{.reports-layout{display:block}.report-controls,.report-actions,.report-footer{display:none!important}.report-preview{border:0;box-shadow:none;min-height:0}.report-table thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}.report-table-wrap{overflow:visible;padding:0}.report-header{padding-left:0;padding-right:0}}
-</style>
+.reports-shell{display:grid;gap:18px}.reports-hero,.preview-header{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#6f7b76}.reports-hero h2{font-size:25px;margin:4px 0}.reports-hero p,.preview-header p{margin:0;color:#718078}.btn-brand{display:inline-flex;align-items:center;gap:7px;border:1px solid #147d58;background:#147d58;color:#fff;font-weight:800;border-radius:8px}.reports-layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px}.builder-card,.preview-card{border:1px solid #e2e8e5;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(16,29,50,.04)}.builder-card{padding:18px;height:max-content}.section-title{display:flex;gap:9px;align-items:center;padding-bottom:14px;border-bottom:1px solid #edf0ee}.section-title h3{margin:2px 0 0;font-size:16px}.section-title svg{color:#147d58}.report-types{display:grid;gap:5px;margin:14px 0}.report-types button{display:flex;gap:10px;text-align:left;border:1px solid transparent;background:transparent;border-radius:9px;padding:9px;color:#53625b}.report-types button:hover{background:#f5faf7}.report-types button.active{background:#ebf7f0;border-color:#bfe4d1;color:#147d58}.report-types svg{margin-top:2px;flex:none}.report-types b,.report-types small{display:block}.report-types b{font-size:12px}.report-types small{font-size:10px;color:#718078;margin-top:2px}.parameters{padding-top:14px;border-top:1px solid #edf0ee}.parameters label{display:grid;gap:6px;margin-top:8px;color:#526159;font-size:12px;font-weight:800}.parameters p{margin:7px 0 0;color:#718078;font-size:12px}.preview-card{min-height:620px;overflow:hidden}.preview-header{padding:22px 24px;border-bottom:1px solid #edf0ee}.preview-header h1{font-size:22px;margin:4px 0}.report-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:7px}.report-actions .btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800}.save-success{display:flex;align-items:center;gap:10px;margin:18px 24px 0;padding:11px 13px;border:1px solid #bfe4d1;background:#effaf4;border-radius:9px;color:#147d58}.save-success span{min-width:0;flex:1}.save-success b,.save-success small{display:block}.save-success small{margin-top:2px;color:#5f7468;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.save-success button{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;padding:18px 24px}.summary-grid article{border:1px solid #e5eee9;border-radius:10px;padding:13px;background:#f8fbf9}.summary-grid span,.summary-grid small{display:block;color:#718078;font-size:11px}.summary-grid strong{display:block;margin:6px 0;font-size:16px}.table-heading{display:flex;justify-content:space-between;align-items:center;padding:0 24px 10px}.table-heading h3{font-size:14px;margin:0}.table-heading span{color:#718078;font-size:11px}.report-table{margin:0;font-size:12px}.report-table th{background:#f5f8f6;color:#617069;font-size:9px;text-transform:uppercase;letter-spacing:.05em;padding:11px 14px;white-space:nowrap}.report-table td{padding:11px 14px;border-color:#edf0ee}.empty-table{text-align:center;color:#718078;padding:45px!important}.preview-card footer{padding:12px 24px;border-top:1px solid #edf0ee;color:#83908a;font-size:10px}.empty-preview{min-height:620px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.empty-preview>span{display:grid;place-items:center;width:65px;height:65px;border-radius:50%;background:#eaf6ef;color:#147d58}.empty-preview h2{font-size:19px;margin:15px 0 5px}.empty-preview p{margin:0;color:#718078}.spinning{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:980px){.reports-layout{grid-template-columns:1fr}.builder-card{height:auto}.report-types{grid-template-columns:1fr 1fr}.preview-card,.empty-preview{min-height:440px}}@media(max-width:600px){.reports-hero,.preview-header{flex-direction:column}.reports-hero .btn{width:100%;justify-content:center}.report-actions{justify-content:flex-start}.report-types{grid-template-columns:1fr}.preview-header,.summary-grid,.table-heading{padding-inline:16px}.save-success{margin-inline:16px;align-items:flex-start;flex-wrap:wrap}.save-success button{width:100%;justify-content:center}}</style>

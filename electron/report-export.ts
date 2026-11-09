@@ -1,13 +1,15 @@
 import ExcelJS from 'exceljs'
-import { app, BrowserWindow, dialog, type BrowserWindow as MainWindow } from 'electron'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, dialog, shell, type BrowserWindow as MainWindow } from 'electron'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-type Report = { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }
+export type Report = { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }
+const reportsDirectory = () => path.join(app.getPath('documents'), 'Trackpad', 'Reports')
 const escapeHtml = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
 
 export async function exportExcel(window: MainWindow, report: Report) {
-  const choice = await dialog.showSaveDialog(window, { defaultPath: `Trackpad_${report.period}.xlsx`, filters: [{ name: 'Excel', extensions: ['xlsx'] }] })
+  await mkdir(reportsDirectory(), { recursive: true })
+  const choice = await dialog.showSaveDialog(window, { defaultPath: path.join(reportsDirectory(), `Trackpad_${report.period.replaceAll(/[^a-z0-9_-]/gi, '-')}.xlsx`), filters: [{ name: 'Excel workbook', extensions: ['xlsx'] }] })
   if (choice.canceled || !choice.filePath) return null
   const workbook = new ExcelJS.Workbook()
   const summary = workbook.addWorksheet('Summary')
@@ -29,41 +31,55 @@ export async function exportExcel(window: MainWindow, report: Report) {
   return choice.filePath
 }
 
+function timestamp() { return new Date().toISOString().replaceAll(/[:.]/g, '-').replace('T', '_').slice(0, 19) }
+
 function buildReportHtml(report: Report) {
   const allHeaders = Object.keys(report.rows[0] ?? report.summary[0] ?? {})
   const preferred = ['record_number', 'client_name', 'record_date', 'event_date', 'status_name', 'grand_total_minor', 'paid_minor', 'payment_status', 'invoice_no', 'location']
   const headers = preferred.filter(key => allHeaders.includes(key)).concat(allHeaders.filter(key => !preferred.includes(key) && !['id', 'status_id', 'currency', 'deleted_at', 'created_at', 'updated_at'].includes(key)).slice(0, 5))
-  const widths = headers.map(key => key.includes('name') || key.includes('title') ? 20 : key.includes('number') ? 13 : 100 / Math.max(headers.length, 1))
   const formatNumber = (value: unknown) => new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(value || 0))
-  const formatCell = (key: string, value: unknown) => key.includes('minor') || key.includes('total') || key.includes('amount') ? `${formatNumber(value)} TZS` : String(value ?? '—')
-  const summaryHtml = report.summary.map(item => `<div><b>${escapeHtml(item.status_name ?? item.client_name ?? 'Total')}</b><br>${escapeHtml(item.records ?? 0)} orders · <b>${escapeHtml(formatNumber(item.total_minor ?? item.grand_total_minor))} TZS</b></div>`).join('')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4 landscape;margin:12mm}body{font:9px Arial;color:#18253a}header{border-bottom:3px solid #147d58;padding-bottom:8px;margin-bottom:12px}h1{margin:0;font-size:20px}.summary{display:flex;gap:8px;margin:10px 0}.summary div{background:#edf8f2;padding:7px;border-radius:4px;min-width:110px}.summary b{font-size:10px}table{width:100%;table-layout:fixed;border-collapse:collapse}th{background:#147d58;color:white;text-align:left;padding:7px 5px;font-size:8px;text-transform:uppercase}td{border-bottom:1px solid #dfe6ed;padding:6px 5px;overflow-wrap:anywhere;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}footer{position:fixed;bottom:0;color:#66758b;font-size:8px}</style></head><body><header><h1>${escapeHtml(report.title ?? 'Trackpad Report')}</h1><p>Period: ${escapeHtml(report.period)} · Generated ${escapeHtml(new Date().toLocaleString())}</p></header><section class="summary">${summaryHtml}</section><table><colgroup>${widths.map(width => `<col style="width:${width}%">`).join('')}</colgroup><thead><tr>${headers.map(key => `<th>${escapeHtml(key.replaceAll('_', ' ').replaceAll(/\b\w/g, (c: string) => c.toUpperCase()))}</th>`).join('')}</tr></thead><tbody>${report.rows.length ? report.rows.map(row => `<tr>${headers.map(key => `<td>${escapeHtml(formatCell(key, row[key]))}</td>`).join('')}</tr>`).join('') : '<tr><td colspan="100%">No records match this report.</td></tr>'}</tbody></table><footer>Trackpad · Confidential</footer></body></html>`
+  const formatCell = (key: string, value: unknown) => key.includes('minor') || key.includes('total') || key.includes('amount') ? `${formatNumber(value)} TZS` : String(value ?? '-')
+  const summary = report.summary.map(item => `<article><b>${escapeHtml(item.status_name ?? item.client_name ?? 'Total')}</b><span>${escapeHtml(item.records ?? 0)} orders</span><strong>${escapeHtml(formatNumber(item.total_minor ?? item.grand_total_minor))} TZS</strong></article>`).join('')
+  const headings = headers.map(key => `<th>${escapeHtml(key.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase()))}</th>`).join('')
+  const rows = report.rows.length ? report.rows.map(row => `<tr>${headers.map(key => `<td>${escapeHtml(formatCell(key, row[key]))}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${Math.max(headers.length, 1)}" class="empty">No records match this report.</td></tr>`
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(report.title ?? 'Trackpad Report')}</title><style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font:10px Arial,sans-serif;color:#172b23}header{display:flex;justify-content:space-between;align-items:start;border-bottom:3px solid #147d58;padding-bottom:12px;margin-bottom:14px}h1{font-size:22px;margin:0 0 5px}p{margin:0;color:#607069}.summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.summary article{min-width:130px;border:1px solid #dce8e2;background:#f2faf6;border-radius:5px;padding:8px}.summary b,.summary span,.summary strong{display:block}.summary span{font-size:8px;color:#607069;margin:3px 0}.summary strong{font-size:11px}table{width:100%;border-collapse:collapse;table-layout:fixed}th{background:#147d58;color:#fff;text-align:left;padding:7px 5px;font-size:8px;text-transform:uppercase}td{border-bottom:1px solid #dfe6e2;padding:7px 5px;overflow-wrap:anywhere;vertical-align:top}tr{page-break-inside:avoid}thead{display:table-header-group}.empty{text-align:center;padding:28px}footer{margin-top:10px;color:#607069;font-size:8px}</style></head><body><header><div><h1>${escapeHtml(report.title ?? 'Trackpad Report')}</h1><p>Period: ${escapeHtml(report.period)}</p></div><p>Generated ${escapeHtml(new Date().toLocaleString())}</p></header>${summary ? `<section class="summary">${summary}</section>` : ''}<table><thead><tr>${headings}</tr></thead><tbody>${rows}</tbody></table><footer>Trackpad Report - Confidential</footer></body></html>`
 }
 
-async function withReportWindow<T>(report: Report, action: (window: BrowserWindow) => Promise<T>) {
-  const reportWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
-  try {
-    await reportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildReportHtml(report))}`)
-    await new Promise<void>(resolve => setTimeout(resolve, 150))
-    return await action(reportWindow)
-  } finally { reportWindow.destroy() }
+async function createReportWindow(parent: MainWindow, report: Report, visible = false) {
+  const reportWindow = new BrowserWindow({ parent, modal: visible, show: false, width: 1050, height: 760, title: report.title ?? 'Trackpad Report', webPreferences: { sandbox: true } })
+  await reportWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildReportHtml(report))}`)
+  await new Promise<void>(resolve => setTimeout(resolve, 200))
+  if (visible) reportWindow.show()
+  return reportWindow
 }
 
 export async function exportPdf(window: MainWindow, report: Report) {
-  const reportsDirectory = path.join(app.getPath('documents'), 'Trackpad', 'Reports')
-  await mkdir(reportsDirectory, { recursive: true })
-  const suggestedName = `Trackpad_${report.period.replaceAll(/[^a-z0-9_-]/gi, '-')}`
-  const choice = await dialog.showSaveDialog(window, { defaultPath: path.join(reportsDirectory, `${suggestedName}.pdf`), filters: [{ name: 'PDF', extensions: ['pdf'] }] })
-  if (choice.canceled || !choice.filePath) return null
-  await withReportWindow(report, async reportWindow => {
+  const directory = reportsDirectory()
+  await mkdir(directory, { recursive: true })
+  const filePath = path.join(directory, `Trackpad_${report.period.replaceAll(/[^a-z0-9_-]/gi, '-')}_${timestamp()}.pdf`)
+  const reportWindow = await createReportWindow(window, report)
+  try {
     const pdf = await reportWindow.webContents.printToPDF({ pageSize: 'A4', landscape: true, printBackground: true, margins: { top: 0, bottom: 0, left: 0, right: 0 } })
-    await writeFile(choice.filePath!, pdf)
-  })
-  return choice.filePath
+    await writeFile(filePath, pdf)
+    if ((await stat(filePath)).size === 0) throw new Error('PDF_WRITE_FAILED')
+    return filePath
+  } catch (error) {
+    if (error instanceof Error && error.message === 'PDF_WRITE_FAILED') throw error
+    throw new Error('PDF_EXPORT_FAILED')
+  } finally { reportWindow.destroy() }
 }
 
-export async function printReport(report: Report) {
-  return withReportWindow(report, reportWindow => new Promise<void>((resolve, reject) => {
-    reportWindow.webContents.print({ silent: false, printBackground: true, landscape: true, pageSize: 'A4' }, (success, failureReason) => success ? resolve() : reject(new Error(failureReason || 'PRINT_FAILED')))
-  }))
+export async function printReport(parent: MainWindow, report: Report) {
+  const reportWindow = await createReportWindow(parent, report, true)
+  try {
+    await new Promise<void>((resolve, reject) => reportWindow.webContents.print({ silent: false, printBackground: true, landscape: true, pageSize: 'A4' }, (success, reason) => success ? resolve() : reject(new Error(reason || 'PRINT_FAILED'))))
+  } finally { if (!reportWindow.isDestroyed()) reportWindow.destroy() }
+}
+
+export async function revealReport(filePath: string) {
+  const root = path.resolve(reportsDirectory())
+  const candidate = path.resolve(filePath)
+  if (!candidate.startsWith(`${root}${path.sep}`)) throw new Error('REPORT_FILE_NOT_FOUND')
+  try { if (!(await stat(candidate)).isFile()) throw new Error('REPORT_FILE_NOT_FOUND') } catch { throw new Error('REPORT_FILE_NOT_FOUND') }
+  shell.showItemInFolder(candidate)
 }
