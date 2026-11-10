@@ -2,21 +2,50 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
 
 :root {
-  --brand:       #147d58;
-  --brand-dark:  #0f5d42;
-  --cream:       #f4f7f6;
-  --tan:         #b19470;
-  --rust:        #76453b;
+  --brand:       #43766C;
+  --brand-dark:  #345d55;
+  --brand-soft:  #e9f1ef;
+  --cream:       #F8FAE5;
+  --cream-soft:  #fbfcf2;
+  --tan:         #B19470;
+  --tan-soft:    #f4efe8;
+  --rust:        #76453B;
+  --rust-soft:   #f6ecea;
   --card:        #FFFFFF;
-  --border:      #E5DDD0;
-  --text:        #2C2016;
-  --muted:       #7A6B5A;
+  --border:      #E5DEC9;
+  --text:        #26211D;
+  --muted:       #73685D;
 
-  font-family: 'Inter Variable', Inter, system-ui, sans-serif;
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
   color: var(--text);
   background: var(--cream);
 }
 
-* { box-sizing: border-box; }
-body { margin: 0; }
-button, input, select, textarea { font: inherit; }
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--text);
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.form-control:focus,
+.form-select:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px rgba(67, 118, 108, 0.16) !important;
+  outline: none;
+}

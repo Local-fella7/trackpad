@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { ref } from 'vue'
 import { calculateTotals, formatMoney, lineTotal } from '../shared/money'
-import { cloneRecordItems } from '../shared/record-payload'
+import { cloneIpcPayload, cloneRecordItems } from '../shared/record-payload'
 
 describe('money calculations', () => {
   it('calculates ordinary whole-number TZS quantities and prices', () => {
@@ -16,5 +17,23 @@ describe('money calculations', () => {
     const items = cloneRecordItems([{ description: '  Catering ', quantity: 100, unitPrice: 4000 }])
     expect(structuredClone(items)).toEqual([{ description: 'Catering', quantity: 100, unitPrice: 4000 }])
     expect(calculateTotals(items, 0).grandTotal).toBe(400000)
+  })
+  it('unwraps reactive report proxies into structured-cloneable objects for Electron IPC', () => {
+    const reactiveReport = ref({
+      type: 'monthly',
+      title: 'Trackpad Monthly Report',
+      period: '2026-11',
+      rows: [{ id: 1, client_name: 'Acme', grand_total_minor: 50000 }],
+      summary: [{ currency: 'TZS', records: 1, total_minor: 50000 }],
+    })
+    expect(() => structuredClone(reactiveReport.value)).toThrow()
+    const cloned = cloneIpcPayload(reactiveReport.value)
+    expect(structuredClone(cloned)).toEqual({
+      type: 'monthly',
+      title: 'Trackpad Monthly Report',
+      period: '2026-11',
+      rows: [{ id: 1, client_name: 'Acme', grand_total_minor: 50000 }],
+      summary: [{ currency: 'TZS', records: 1, total_minor: 50000 }],
+    })
   })
 })
