@@ -16,7 +16,7 @@ import { createStatus, listStatuses, removeStatus, reorderStatuses, setDefaultSt
 import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
 import { getReportData, reportTypes, type ReportType, type ReportParams } from './reports'
-import { exportExcel, exportPdf, printReport, revealReport } from './report-export'
+import { exportExcel, exportPdf, printOrderItems, printReport, revealReport } from './report-export'
 import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
 import { copyFileSync, existsSync } from 'node:fs'
 import { addPayment, deletePayment, listBilling, listPayments } from './db/repos/payments'
@@ -162,6 +162,13 @@ app.whenReady().then(() => {
     return saveRecord(database!, payload.id, payload.record, payload.items, user.id)
   }))
   ipcMain.handle('records:delete', (_event, id: unknown) => toIpcResult(() => softDeleteRecord(database!, Number(id), requireSessionUser().id)))
+  ipcMain.handle('records:printItems', (_event, id: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    if (!mainWindow) throw new Error('INVALID_INPUT')
+    const detail = getRecord(database!, Number(id)) as { record: Record<string, unknown>; items: Record<string, unknown>[] } | null
+    if (!detail) throw new Error('INVALID_INPUT')
+    return printOrderItems(mainWindow, detail)
+  }))
   ipcMain.handle('records:workflow', (_event, input: unknown) => toIpcResult(() => { const value=input as {id?:unknown;stage?:unknown;enabled?:unknown}; if (!value || !Number.isInteger(value.id) || !['confirmed','paid','delivered'].includes(String(value.stage)) || typeof value.enabled !== 'boolean') throw new Error('INVALID_INPUT'); return updateWorkflow(database!, value.id as number, value.stage as 'confirmed'|'paid'|'delivered', value.enabled, requireSessionUser().id) }))
   ipcMain.handle('billing:list', () => toIpcResult(() => { requireSessionUser(); return listBilling(database!) }))
   ipcMain.handle('billing:payments', (_event, recordId: unknown) => toIpcResult(() => { requireSessionUser(); return listPayments(database!, Number(recordId)) }))

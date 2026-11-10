@@ -4,8 +4,9 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarClock,
-  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Layers,
   MapPin,
@@ -14,6 +15,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-vue-next'
+import { formatDate } from '../../shared/date'
 import StatusProgress from './StatusProgress.vue'
 
 const props = defineProps<{
@@ -29,19 +31,68 @@ const emit = defineEmits<{
 
 const max = (rows: any[], key: string) => Math.max(...(rows || []).map(row => Number(row[key]) || 0), 1)
 
-const calendarDays = computed(() =>
-  Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() + i)
-    const key = d.toISOString().slice(0, 10)
-    return {
-      key,
-      label: d.toLocaleDateString('en-TZ', { weekday: 'short' }),
-      day: d.getDate(),
-      data: props.dashboard?.calendar?.find((x: any) => x.event_date === key),
-    }
-  }),
+const todayIso = () => new Date().toISOString().slice(0, 10)
+const calendarCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+
+const calendarMonthLabel = computed(() =>
+  calendarCursor.value.toLocaleDateString('en-TZ', { month: 'long', year: 'numeric' }),
 )
+
+function shiftMonth(delta: number) {
+  calendarCursor.value = new Date(calendarCursor.value.getFullYear(), calendarCursor.value.getMonth() + delta, 1)
+}
+
+function goToday() {
+  calendarCursor.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+}
+
+const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+const monthCells = computed(() => {
+  const year = calendarCursor.value.getFullYear()
+  const month = calendarCursor.value.getMonth()
+  const firstOfMonth = new Date(year, month, 1)
+  // Convert Sunday=0..Saturday=6 into Monday=0..Sunday=6
+  const startOffset = (firstOfMonth.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const calendarRows: any[] = props.dashboard?.calendar || []
+  const byDate = new Map(calendarRows.map(item => [item.event_date, item]))
+
+  const cells: Array<{
+    key: string
+    day: number | null
+    dateStr?: string
+    isToday?: boolean
+    confirmedCount: number
+    pendingCount: number
+    totalCount: number
+  }> = []
+
+  for (let i = 0; i < startOffset; i++) {
+    cells.push({ key: `pad-start-${i}`, day: null, confirmedCount: 0, pendingCount: 0, totalCount: 0 })
+  }
+
+  const today = todayIso()
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`
+    const match = byDate.get(dateStr)
+    const confirmedCount = Number(match?.confirmed_count || 0)
+    const pendingCount = Number(match?.pending_count || 0)
+    const totalCount = Number(match?.count || confirmedCount + pendingCount)
+    cells.push({
+      key: dateStr,
+      day,
+      dateStr,
+      isToday: dateStr === today,
+      confirmedCount,
+      pendingCount,
+      totalCount,
+    })
+  }
+
+  return cells
+})
 
 const statusList = computed(() => {
   const palette: Record<string, string> = {
@@ -63,8 +114,8 @@ const activityBars = computed(() => {
   const rows: any[] = props.dashboard?.last30Days || []
   const highest = max(rows, 'count')
   return rows.slice(-14).map(row => ({
-    date: row.record_date,
-    label: row.record_date?.slice(5) || '',
+    date: formatDate(row.record_date),
+    label: formatDate(row.record_date).slice(0, 5),
     count: Number(row.count || 0),
     height: `${Math.max(12, Math.round((Number(row.count || 0) / highest) * 100))}%`,
   }))
@@ -135,7 +186,7 @@ const activityBars = computed(() => {
           <i class="kpi-icon tan"><Sparkles :size="18" /></i>
         </div>
         <strong>{{ dashboard?.recordsToday || 0 }}</strong>
-        <small>Created today</small>
+        <small>Booked on {{ formatDate(todayIso()) }}</small>
       </article>
 
       <article class="kpi-card" @click="emit('filter', '')">
@@ -159,46 +210,65 @@ const activityBars = computed(() => {
 
     <!-- Main Dashboard Grid -->
     <section class="grid">
-      <!-- 7-Day Event Schedule & Activity -->
+      <!-- Full-Month Event Schedule Calendar -->
       <article class="card">
-        <div class="heading">
+        <div class="calendar-header">
           <div>
-            <span class="eyebrow">Schedule</span>
-            <h2>Next 7 Days</h2>
+            <span class="eyebrow">Monthly Event Schedule</span>
+            <h2>{{ calendarMonthLabel }}</h2>
           </div>
-          <CalendarDays :size="18" class="muted-icon" />
-        </div>
-        <div class="calendar">
-          <div
-            v-for="d in calendarDays"
-            :key="d.key"
-            :class="{ today: d.key === new Date().toISOString().slice(0, 10), busy: Boolean(d.data) }"
-          >
-            <small>{{ d.label }}</small>
-            <b>{{ d.day }}</b>
-            <em v-if="d.data" :title="`${d.data.count} event(s)`">{{ d.data.count }}</em>
-            <span v-else class="dot-empty">·</span>
+          <div class="calendar-controls">
+            <div class="legend">
+              <span class="legend-item"><i class="dot confirmed"></i> Confirmed</span>
+              <span class="legend-item"><i class="dot pending"></i> Pending</span>
+            </div>
+            <div class="month-nav">
+              <button type="button" title="Previous month" @click="shiftMonth(-1)"><ChevronLeft :size="15" /></button>
+              <button type="button" class="today-btn" @click="goToday">Today</button>
+              <button type="button" title="Next month" @click="shiftMonth(1)"><ChevronRight :size="15" /></button>
+            </div>
           </div>
         </div>
 
-        <div class="sub-section">
-          <div class="sub-heading">
-            <span>Recent Daily Order Volume</span>
-            <small>{{ activityBars.length }} active days</small>
-          </div>
-          <div v-if="activityBars.length" class="activity-bars">
-            <div v-for="bar in activityBars" :key="bar.date" class="bar-col" :title="`${bar.date}: ${bar.count} orders`">
-              <div class="bar-track">
-                <i :style="{ height: bar.height }"></i>
+        <div class="month-weekdays">
+          <span v-for="w in weekDays" :key="w">{{ w }}</span>
+        </div>
+
+        <div class="month-grid">
+          <div
+            v-for="cell in monthCells"
+            :key="cell.key"
+            class="day-cell"
+            :class="{
+              empty: cell.day === null,
+              today: cell.isToday,
+              'has-confirmed': cell.confirmedCount > 0 && cell.pendingCount === 0,
+              'has-pending': cell.pendingCount > 0 && cell.confirmedCount === 0,
+              'has-mixed': cell.confirmedCount > 0 && cell.pendingCount > 0,
+            }"
+            :title="
+              cell.dateStr
+                ? `${formatDate(cell.dateStr)} · Confirmed: ${cell.confirmedCount}, Pending: ${cell.pendingCount}`
+                : ''
+            "
+            @click="cell.totalCount > 0 ? emit('filter', '') : undefined"
+          >
+            <template v-if="cell.day !== null">
+              <span class="day-num">{{ cell.day }}</span>
+              <div v-if="cell.totalCount > 0" class="day-badges">
+                <em v-if="cell.confirmedCount > 0" class="badge-confirmed" :title="`${cell.confirmedCount} confirmed`">
+                  {{ cell.confirmedCount }}
+                </em>
+                <em v-if="cell.pendingCount > 0" class="badge-pending" :title="`${cell.pendingCount} pending`">
+                  {{ cell.pendingCount }}
+                </em>
               </div>
-              <small>{{ bar.label }}</small>
-            </div>
+            </template>
           </div>
-          <p v-else class="empty-compact">Order activity bars will appear as orders are recorded.</p>
         </div>
       </article>
 
-      <!-- Order Status Breakdown -->
+      <!-- Order Status Breakdown & Daily Activity -->
       <article class="card">
         <div class="heading">
           <div>
@@ -239,6 +309,22 @@ const activityBars = computed(() => {
             </strong>
           </div>
         </div>
+
+        <div class="sub-section">
+          <div class="sub-heading">
+            <span>Recent Daily Order Volume (dd-mm)</span>
+            <small>{{ activityBars.length }} active days</small>
+          </div>
+          <div v-if="activityBars.length" class="activity-bars">
+            <div v-for="bar in activityBars" :key="bar.date" class="bar-col" :title="`${bar.date}: ${bar.count} orders`">
+              <div class="bar-track">
+                <i :style="{ height: bar.height }"></i>
+              </div>
+              <small>{{ bar.label }}</small>
+            </div>
+          </div>
+          <p v-else class="empty-compact">Order activity bars will appear as orders are recorded.</p>
+        </div>
       </article>
 
       <!-- Upcoming Events List -->
@@ -247,7 +333,7 @@ const activityBars = computed(() => {
           <div>
             <span class="eyebrow">Operations</span>
             <h2>Upcoming Events</h2>
-            <small>Events scheduled over the next 30 days</small>
+            <small>Events scheduled over the next 30 days (Confirmed in Teal · Pending in Tan)</small>
           </div>
           <button type="button" class="link-btn" @click="emit('filter', '')">
             View all orders <ArrowUpRight :size="15" />
@@ -256,19 +342,22 @@ const activityBars = computed(() => {
 
         <div v-if="dashboard?.upcomingEvents?.length" class="event-list">
           <button
-            v-for="event in dashboard.upcomingEvents.slice(0, 5)"
+            v-for="event in dashboard.upcomingEvents.slice(0, 6)"
             :key="event.id"
             type="button"
             class="event-row"
+            :class="{ confirmed: Boolean(event.is_confirmed), pending: !event.is_confirmed }"
             @click="emit('filter', '')"
           >
             <div class="event-date-badge">
-              <b>{{ date(event.event_date) }}</b>
+              <b>{{ formatDate(event.event_date) }}</b>
               <small><MapPin :size="12" /> {{ event.location || 'Location not set' }}</small>
             </div>
             <div class="event-client">
               <b>{{ event.client_name }}</b>
-              <span class="status-pill">{{ event.status_name }}</span>
+              <span class="status-pill" :class="{ confirmed: Boolean(event.is_confirmed), pending: !event.is_confirmed }">
+                {{ event.status_name }}
+              </span>
             </div>
             <strong class="event-amount">{{ money(event.grand_total_minor) }}</strong>
           </button>
@@ -331,7 +420,7 @@ const activityBars = computed(() => {
     </section>
 
     <small class="fresh">
-      Last updated {{ dashboard?.generatedAt ? new Date(dashboard.generatedAt).toLocaleTimeString() : 'just now' }}
+      Last updated {{ dashboard?.generatedAt ? formatDate(dashboard.generatedAt) : formatDate(new Date()) }}
     </small>
   </div>
 </template>
@@ -397,7 +486,7 @@ const activityBars = computed(() => {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease;
 }
 
 .chip:hover {
@@ -452,7 +541,7 @@ const activityBars = computed(() => {
 
 .kpi-card.highlight-teal .kpi-top span,
 .kpi-card.highlight-teal small {
-  color: rgba(248, 250, 229, 0.8) !important;
+  color: rgba(248, 250, 229, 0.82) !important;
 }
 
 .kpi-card.highlight-teal .kpi-icon.teal {
@@ -552,14 +641,17 @@ const activityBars = computed(() => {
   margin-bottom: 3px;
 }
 
-.heading {
+.heading,
+.calendar-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
   margin-bottom: 14px;
 }
 
-.heading h2 {
+.heading h2,
+.calendar-header h2 {
   margin: 0;
   font-size: 17px;
   font-weight: 800;
@@ -593,61 +685,163 @@ const activityBars = computed(() => {
   background: #E9F1EF;
 }
 
-/* Calendar 7 Days */
-.calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+/* Full-Month Calendar */
+.calendar-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
 }
 
-.calendar > div {
-  text-align: center;
-  padding: 12px 4px;
-  border-radius: 11px;
-  background: #F8FAE5;
-  border: 1px solid #E5DEC9;
+.legend {
   display: flex;
-  flex-direction: column;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
   align-items: center;
+  gap: 5px;
+}
+
+.legend-item .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-item .dot.confirmed {
+  background: #43766C;
+}
+
+.legend-item .dot.pending {
+  background: #B19470;
+}
+
+.month-nav {
+  display: flex;
   gap: 4px;
 }
 
-.calendar > div.busy {
-  border-color: #B19470;
+.month-nav button {
+  border: 1px solid var(--border);
+  background: #FBFCF4;
+  color: var(--text);
+  border-radius: 7px;
+  height: 28px;
+  min-width: 28px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 7px;
+  cursor: pointer;
 }
 
-.calendar .today {
+.month-nav button:hover {
   background: #43766C;
   border-color: #43766C;
   color: #F8FAE5;
 }
 
-.calendar .today small {
-  color: rgba(248, 250, 229, 0.8);
-}
-
-.calendar b {
-  font-size: 16px;
-  font-weight: 800;
-}
-
-.calendar em {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #B19470;
-  color: #F8FAE5;
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+  text-align: center;
   font-size: 10px;
   font-weight: 800;
-  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 
-.dot-empty {
-  color: #C7B9A5;
-  font-size: 12px;
-  line-height: 20px;
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.day-cell {
+  min-height: 54px;
+  border: 1px solid #EFECE0;
+  border-radius: 9px;
+  background: #FBFCF4;
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.day-cell.empty {
+  background: transparent;
+  border-color: transparent;
+}
+
+.day-cell.today {
+  border: 2px solid #43766C;
+  background: #F8FAE5;
+}
+
+.day-cell.has-confirmed {
+  background: #E9F1EF;
+  border-color: #43766C;
+  cursor: pointer;
+}
+
+.day-cell.has-pending {
+  background: #F4EFE8;
+  border-color: #B19470;
+  cursor: pointer;
+}
+
+.day-cell.has-mixed {
+  background: linear-gradient(135deg, #E9F1EF 0%, #F4EFE8 100%);
+  border-color: #43766C;
+  cursor: pointer;
+}
+
+.day-num {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.day-badges {
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.badge-confirmed,
+.badge-pending {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 800;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 99px;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.badge-confirmed {
+  background: #43766C;
+  color: #F8FAE5;
+}
+
+.badge-pending {
+  background: #B19470;
+  color: #F8FAE5;
 }
 
 /* Activity Bars */
@@ -671,7 +865,7 @@ const activityBars = computed(() => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(22px, 1fr));
   gap: 6px;
-  height: 92px;
+  height: 86px;
   align-items: end;
   padding: 10px 12px 6px;
   background: #F8FAE5;
@@ -722,8 +916,8 @@ const activityBars = computed(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 18px;
-  padding-top: 16px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
@@ -731,7 +925,7 @@ const activityBars = computed(() => {
   background: #F8FAE5;
   border: 1px solid #E5DEC9;
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 11px 14px;
 }
 
 .status-summary-box small {
@@ -743,10 +937,10 @@ const activityBars = computed(() => {
 
 .status-summary-box strong {
   display: block;
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 800;
   color: #43766C;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 
 /* Upcoming Events */
@@ -762,6 +956,7 @@ const activityBars = computed(() => {
   align-items: center;
   gap: 14px;
   border: 1px solid var(--border);
+  border-left: 4px solid #B19470;
   border-radius: 11px;
   background: #FBFCF4;
   padding: 12px 16px;
@@ -770,9 +965,16 @@ const activityBars = computed(() => {
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
+.event-row.confirmed {
+  border-left-color: #43766C;
+}
+
+.event-row.pending {
+  border-left-color: #B19470;
+}
+
 .event-row:hover {
   background: #F8FAE5;
-  border-color: #B19470;
 }
 
 .event-date-badge b {
@@ -800,10 +1002,20 @@ const activityBars = computed(() => {
   display: inline-block;
   padding: 3px 9px;
   border-radius: 99px;
-  background: #E9F1EF;
-  color: #43766C;
+  background: #F4EFE8;
+  color: #76453B;
   font-size: 11px;
   font-weight: 800;
+}
+
+.status-pill.confirmed {
+  background: #43766C;
+  color: #F8FAE5;
+}
+
+.status-pill.pending {
+  background: #B19470;
+  color: #F8FAE5;
 }
 
 .event-amount {

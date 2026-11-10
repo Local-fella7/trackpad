@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
     create: (input: unknown) => ipcRenderer.invoke('records:create', input),
     update: (input: unknown) => ipcRenderer.invoke('records:update', input),
     remove: (id: number) => ipcRenderer.invoke('records:delete', id),
+    printItems: (id: number) => ipcRenderer.invoke('records:printItems', id),
     workflow: (input: unknown) => ipcRenderer.invoke('records:workflow', input),
   },
   statuses: {

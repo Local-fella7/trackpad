@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ref } from 'vue'
+import { formatDate, formatReportPeriod } from '../shared/date'
 import { calculateTotals, formatMoney, lineTotal } from '../shared/money'
 import { cloneIpcPayload, cloneRecordItems } from '../shared/record-payload'
 
@@ -35,5 +36,11 @@ describe('money calculations', () => {
       rows: [{ id: 1, client_name: 'Acme', grand_total_minor: 50000 }],
       summary: [{ currency: 'TZS', records: 1, total_minor: 50000 }],
     })
+  })
+  it('formats dates and report periods as dd-mm-yyyy', () => {
+    expect(formatDate('2026-11-10')).toBe('10-11-2026')
+    expect(formatDate('')).toBe('—')
+    expect(formatReportPeriod('2026-11-10')).toBe('10-11-2026')
+    expect(formatReportPeriod('2026-11')).toBe('11-2026')
   })
 })

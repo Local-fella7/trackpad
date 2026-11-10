@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { CalendarDays, Check, Plus, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-vue-next'
+import { CalendarDays, Check, Edit3, Plus, Printer, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
+import { formatDate } from '../../shared/date'
 import { cloneIpcPayload, cloneRecordItems } from '../../shared/record-payload'
 import AppSidebar, { type Page } from '../components/AppSidebar.vue'
 import BillingView from '../components/BillingView.vue'
@@ -27,6 +28,8 @@ const statuses = ref<any[]>([])
 const dashboard = ref<any>(null)
 
 const modal = ref(false)
+const viewModal = ref(false)
+const viewDetail = ref<{ record: Record<string, any>; items: Record<string, any>[] } | null>(null)
 const step = ref(1)
 const editId = ref<number | null>(null)
 const showPassword = ref(false)
@@ -74,32 +77,22 @@ const tax = computed(() => Math.round((subtotal.value * Number(form.taxRateBasis
 const total = computed(() => subtotal.value + tax.value)
 
 const money = (n: number) => `${new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(n) || 0)} TZS`
-const date = (value?: string) =>
-  value
-    ? new Intl.DateTimeFormat('en-TZ', { day: 'numeric', month: 'short', year: 'numeric' }).format(
-        new Date(`${value}T00:00:00`),
-      )
-    : '—'
-
-const todayLabel = computed(() =>
-  new Intl.DateTimeFormat('en-TZ', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(
-    new Date(),
-  ),
-)
+const date = (value?: string) => formatDate(value, '—')
+const todayLabel = computed(() => formatDate(new Date()))
 
 const pageMeta = computed(() => {
   if (page.value === 'dashboard') {
     return {
       eyebrow: 'EXECUTIVE OVERVIEW',
       title: `Good day, ${user.value?.displayName?.split(' ')[0] || 'there'}`,
-      subtitle: 'Track revenue, upcoming events, and client balances at a glance.',
+      subtitle: 'Track revenue, monthly event schedule, and client balances at a glance.',
     }
   }
   if (page.value === 'orders') {
     return {
       eyebrow: 'ORDER MANAGEMENT',
       title: 'Orders Register',
-      subtitle: 'Create, filter, and manage client orders and delivery workflows.',
+      subtitle: 'Create, view, print item lists, edit, or delete client orders.',
     }
   }
   if (page.value === 'billing') {
@@ -112,7 +105,7 @@ const pageMeta = computed(() => {
   return {
     eyebrow: 'REPORTING CENTRE',
     title: 'Reports & Exports',
-    subtitle: 'Generate, print, and export PDF or Excel summaries.',
+    subtitle: 'Generate, print, and export formal PDF or Excel statements.',
   }
 })
 
@@ -272,7 +265,51 @@ async function newOrder() {
   modal.value = true
 }
 
+async function viewOrder(row: Row) {
+  const r: any = await window.api!.records.get(row.id)
+  if (!r.ok || !r.data) return fail(r.error?.message)
+  viewDetail.value = {
+    record: {
+      ...r.data.record,
+      status_name: row.status_name || statuses.value.find(s => s.id === r.data.record.status_id)?.name || 'Pending',
+      payment_status: row.payment_status || 'Pending',
+      paid_minor: row.paid_minor || 0,
+    },
+    items: r.data.items || [],
+  }
+  viewModal.value = true
+}
+
+async function printOrder(rowOrId: Row | number) {
+  const id = typeof rowOrId === 'number' ? rowOrId : Number(rowOrId.id)
+  if (!id) return
+  try {
+    const r: any = await (window.api!.records as any).printItems(id)
+    if (!r.ok) return fail(r.error.message)
+  } catch (reason) {
+    fail(reason instanceof Error ? `Order items could not be printed: ${reason.message}` : 'Order items could not be printed.')
+  }
+}
+
+async function removeOrder(row: Row) {
+  const confirmResult = await Swal.fire({
+    title: `Delete order ${row.record_number || `#${row.id}`}?`,
+    text: `Client: ${row.client_name} (${money(row.grand_total_minor)}). This will remove the order from your register.`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Delete order',
+    confirmButtonColor: '#76453B',
+  })
+  if (!confirmResult.isConfirmed) return
+  const r: any = await window.api!.records.remove(row.id)
+  if (!r.ok) return fail(r.error?.message)
+  viewModal.value = false
+  notify('Order deleted.')
+  await load()
+}
+
 async function edit(row: Row) {
+  viewModal.value = false
   const r: any = await window.api!.records.get(row.id)
   if (!r.ok || !r.data) return fail(r.error?.message)
   const x = r.data.record
@@ -378,7 +415,14 @@ async function keepLegacy() {
 }
 
 const reportType = ref<
-  'daily' | 'monthly' | 'upcoming-events' | 'unpaid-invoices' | 'delivery-due' | 'status-summary' | 'client-summary'
+  | 'general'
+  | 'daily'
+  | 'monthly'
+  | 'upcoming-events'
+  | 'unpaid-invoices'
+  | 'delivery-due'
+  | 'status-summary'
+  | 'client-summary'
 >('monthly')
 const report = ref<any>(null)
 const reportDay = ref(new Date().toISOString().slice(0, 10))
@@ -422,7 +466,11 @@ async function exportExcel() {
         showConfirmButton: false,
       })
   } catch (reason) {
-    fail(reason instanceof Error ? `Excel could not be saved: ${reason.message}` : 'Excel could not be saved. Please try again.')
+    fail(
+      reason instanceof Error
+        ? `Excel could not be saved: ${reason.message}`
+        : 'Excel could not be saved. Please try again.',
+    )
   } finally {
     reportBusy.value = ''
   }
@@ -447,7 +495,9 @@ async function exportPdf() {
       confirmButtonText: 'Done',
     })
   } catch (reason) {
-    fail(reason instanceof Error ? `PDF could not be saved: ${reason.message}` : 'PDF could not be saved. Please try again.')
+    fail(
+      reason instanceof Error ? `PDF could not be saved: ${reason.message}` : 'PDF could not be saved. Please try again.',
+    )
   } finally {
     reportBusy.value = ''
   }
@@ -460,7 +510,11 @@ async function printReport() {
     const r: any = await window.api!.reports!.print(cloneIpcPayload(report.value))
     if (!r.ok) return fail(r.error.message)
   } catch (reason) {
-    fail(reason instanceof Error ? `Report could not be printed: ${reason.message}` : 'Report could not be printed. Please try again.')
+    fail(
+      reason instanceof Error
+        ? `Report could not be printed: ${reason.message}`
+        : 'Report could not be printed. Please try again.',
+    )
   } finally {
     reportBusy.value = ''
   }
@@ -563,7 +617,10 @@ onMounted(boot)
         :total="recordTotal"
         :total-pages="recordTotalPages"
         @update="updateRecords"
+        @view="viewOrder"
+        @print="printOrder"
         @edit="edit"
+        @remove="removeOrder"
       />
       <BillingView v-else-if="page === 'billing'" @refresh="load" />
       <ReportsView
@@ -576,7 +633,12 @@ onMounted(boot)
         :busy-action="reportBusy"
         :saved-path="savedReportPath"
         :saved-bytes="savedReportBytes"
-        @update:type="value => (reportType = value as any)"
+        @update:type="
+          value => {
+            reportType = value as any
+            void previewReport()
+          }
+        "
         @update:day="value => (reportDay = value)"
         @update:month="value => (reportMonth = value)"
         @update:days="value => (reportDays = value)"
@@ -676,6 +738,98 @@ onMounted(boot)
     </section>
   </div>
 
+  <!-- View Order & Item List Modal -->
+  <div v-if="viewModal && viewDetail" class="shade" @mousedown.self="viewModal = false">
+    <section class="modal">
+      <header class="modal-header">
+        <div>
+          <p>ORDER SPECIFICATION · {{ date(viewDetail.record.record_date) }}</p>
+          <h2>Order {{ viewDetail.record.record_number || `#${viewDetail.record.id}` }} — {{ viewDetail.record.client_name }}</h2>
+        </div>
+        <button type="button" class="close-btn" aria-label="Close modal" @click="viewModal = false">
+          <X :size="18" />
+        </button>
+      </header>
+
+      <div class="body">
+        <div class="review-summary-grid">
+          <div>
+            <small>CLIENT & CONTACTS</small>
+            <strong>{{ viewDetail.record.client_name }}</strong>
+            <p class="meta-line">{{ viewDetail.record.contacts || 'No contact provided' }}</p>
+          </div>
+          <div>
+            <small>EVENT & LOCATION</small>
+            <strong>Event: {{ date(viewDetail.record.event_date) }}</strong>
+            <p class="meta-line">{{ viewDetail.record.location || 'Location not specified' }}</p>
+          </div>
+          <div class="highlight">
+            <small>FINANCIAL SUMMARY</small>
+            <strong>{{ money(viewDetail.record.grand_total_minor) }}</strong>
+            <p class="meta-line">
+              Paid: {{ money(viewDetail.record.paid_minor || 0) }} · Status: {{ viewDetail.record.status_name }}
+            </p>
+          </div>
+        </div>
+
+        <div class="review-summary-grid" style="margin-top: 12px">
+          <div>
+            <small>INVOICE / PROFORMA</small>
+            <strong>Invoice: {{ viewDetail.record.invoice_no || '—' }}</strong>
+            <p class="meta-line">Proforma: {{ viewDetail.record.proforma_no || '—' }}</p>
+          </div>
+          <div>
+            <small>ORDER & DELIVERY FORMS</small>
+            <strong>Order Form: {{ viewDetail.record.order_form_no || '—' }}</strong>
+            <p class="meta-line">Delivery Form: {{ viewDetail.record.delivery_form_no || '—' }}</p>
+          </div>
+          <div>
+            <small>SOURCE OF INFO</small>
+            <strong>{{ viewDetail.record.source_of_info || '—' }}</strong>
+            <p class="meta-line">Order Date: {{ date(viewDetail.record.record_date) }}</p>
+          </div>
+        </div>
+
+        <div class="review-items-card" style="margin-top: 16px">
+          <div class="review-items-head">
+            <span>ORDER ITEMS ({{ viewDetail.items.length }})</span>
+            <span>QUANTITY × UNIT PRICE = LINE TOTAL</span>
+          </div>
+          <div v-for="(item, idx) in viewDetail.items" :key="idx" class="review-item">
+            <span>
+              <b>{{ Number(idx) + 1 }}.</b> {{ item.description }}
+            </span>
+            <span>
+              {{ item.quantity_x100 / 100 }} × {{ money(item.unit_price_minor) }} =
+              <b>{{ money(item.line_total_minor ?? (item.quantity_x100 / 100) * item.unit_price_minor) }}</b>
+            </span>
+          </div>
+          <div class="review-item total-bar">
+            <span>Subtotal: {{ money(viewDetail.record.subtotal_minor) }} · Tax: {{ money(viewDetail.record.tax_minor) }}</span>
+            <strong>GRAND TOTAL: {{ money(viewDetail.record.grand_total_minor) }}</strong>
+          </div>
+        </div>
+
+        <div v-if="viewDetail.record.notes" class="notes-box">
+          <small>REMARKS & NOTES</small>
+          <p>{{ viewDetail.record.notes }}</p>
+        </div>
+      </div>
+
+      <footer class="modal-footer">
+        <button type="button" class="danger" @click="removeOrder(viewDetail.record)">
+          <Trash2 :size="15" /> Delete
+        </button>
+        <button type="button" class="secondary" @click="edit(viewDetail.record)">
+          <Edit3 :size="15" /> Edit order
+        </button>
+        <button type="button" class="primary" @click="printOrder(viewDetail.record.id)">
+          <Printer :size="15" /> Print item list
+        </button>
+      </footer>
+    </section>
+  </div>
+
   <!-- 4-Step Order Modal -->
   <div v-if="modal" class="shade" @mousedown.self="modal = false">
     <section class="modal">
@@ -712,7 +866,7 @@ onMounted(boot)
           <!-- Step 1 -->
           <fieldset v-if="step === 1">
             <div class="fields">
-              <label>Order date *<input v-model="form.recordDate" type="date" required /></label>
+              <label>Order date ({{ date(form.recordDate) }}) *<input v-model="form.recordDate" type="date" required /></label>
               <label>Order number<input v-model="form.recordNumber" readonly class="readonly-input" /></label>
               <label>Client name *<input v-model="form.clientName" placeholder="Client or organization" required /></label>
               <label>Contacts<input v-model="form.contacts" placeholder="Phone or email" /></label>
@@ -776,7 +930,7 @@ onMounted(boot)
           <!-- Step 3 -->
           <fieldset v-if="step === 3">
             <div class="fields">
-              <label>Event date<input v-model="form.eventDate" type="date" /></label>
+              <label>Event date ({{ date(form.eventDate) }})<input v-model="form.eventDate" type="date" /></label>
               <label>Proforma invoice number<input v-model="form.proformaNo" /></label>
               <label>Invoice number<input v-model="form.invoiceNo" /></label>
               <label>Order form number<input v-model="form.orderFormNo" /></label>
@@ -824,6 +978,9 @@ onMounted(boot)
         </div>
 
         <footer class="modal-footer">
+          <button v-if="editId !== null" type="button" class="secondary" @click="printOrder(editId)">
+            <Printer :size="15" /> Print item list
+          </button>
           <button v-if="step > 1" type="button" class="secondary" @click="step--">Back</button>
           <button type="button" class="secondary" @click="modal = false">Cancel</button>
           <button class="primary" :disabled="busy">
@@ -1428,8 +1585,14 @@ fieldset {
 }
 
 .review-summary-grid strong {
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 800;
+}
+
+.meta-line {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .review-items-card {
@@ -1442,11 +1605,11 @@ fieldset {
   display: flex;
   justify-content: space-between;
   padding: 10px 16px;
-  background: #F8FAE5;
+  background: #43766C;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: var(--muted);
+  color: #F8FAE5;
 }
 
 .review-item {
@@ -1454,6 +1617,34 @@ fieldset {
   justify-content: space-between;
   border-top: 1px solid #EFECE0;
   padding: 11px 16px;
+  font-size: 13px;
+}
+
+.review-item.total-bar {
+  background: #F8FAE5;
+  border-top: 2px solid #43766C;
+  font-weight: 700;
+  color: #26211D;
+}
+
+.notes-box {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #FBFCF4;
+}
+
+.notes-box small {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  color: #B19470;
+  margin-bottom: 4px;
+}
+
+.notes-box p {
+  margin: 0;
   font-size: 13px;
 }
 
