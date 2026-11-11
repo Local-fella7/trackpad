@@ -348,7 +348,10 @@ async function createHtmlWindow(parent: MainWindow, title: string, html: string,
   return win
 }
 
-export async function exportPdf(window: MainWindow, report: Report) {
+async function saveHtmlAsPdf(
+  window: MainWindow,
+  options: { title: string; defaultFileName: string; html: string; landscape: boolean },
+) {
   const directory = reportsDirectory()
   try {
     await mkdir(directory, { recursive: true })
@@ -356,13 +359,20 @@ export async function exportPdf(window: MainWindow, report: Report) {
     console.error('[reports] Could not create the reports directory:', error)
     throw new Error('REPORT_STORAGE_FAILED')
   }
-  const safePeriod = formatReportPeriod(report.period).replaceAll(/[^a-z0-9_-]/gi, '-')
-  const filePath = path.join(directory, `Trackpad_${safePeriod}_${timestamp()}.pdf`)
-  const reportWindow = await createHtmlWindow(window, report.title ?? 'Trackpad Report', buildReportHtml(report))
+
+  const choice = await dialog.showSaveDialog(window, {
+    title: options.title,
+    defaultPath: path.join(directory, options.defaultFileName),
+    filters: [{ name: 'PDF document', extensions: ['pdf'] }],
+  })
+  if (choice.canceled || !choice.filePath) return null
+
+  const filePath = choice.filePath.toLowerCase().endsWith('.pdf') ? choice.filePath : `${choice.filePath}.pdf`
+  const reportWindow = await createHtmlWindow(window, options.title, options.html, false)
   try {
     const pdf = await reportWindow.webContents.printToPDF({
       pageSize: 'A4',
-      landscape: true,
+      landscape: options.landscape,
       printBackground: true,
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
     })
@@ -382,46 +392,42 @@ export async function exportPdf(window: MainWindow, report: Report) {
     console.error('[reports] PDF generation failed:', error)
     throw new Error('PDF_EXPORT_FAILED')
   } finally {
-    reportWindow.destroy()
+    if (!reportWindow.isDestroyed()) reportWindow.destroy()
   }
 }
 
+export async function exportPdf(window: MainWindow, report: Report) {
+  const safePeriod = formatReportPeriod(report.period).replaceAll(/[^a-z0-9_-]/gi, '-')
+  return saveHtmlAsPdf(window, {
+    title: report.title ?? 'Trackpad Report',
+    defaultFileName: `Trackpad_${safePeriod}_${timestamp()}.pdf`,
+    html: buildReportHtml(report),
+    landscape: true,
+  })
+}
+
 export async function printReport(parent: MainWindow, report: Report) {
-  const reportWindow = await createHtmlWindow(parent, report.title ?? 'Trackpad Report', buildReportHtml(report), true)
-  try {
-    await new Promise<void>((resolve, reject) =>
-      reportWindow.webContents.print(
-        { silent: false, printBackground: true, landscape: true, pageSize: 'A4' },
-        (success, reason) => (success ? resolve() : reject(new Error(reason || 'PRINT_FAILED'))),
-      ),
-    )
-  } finally {
-    if (!reportWindow.isDestroyed()) reportWindow.destroy()
-  }
+  return exportPdf(parent, report)
 }
 
 export async function printOrderItems(
   parent: MainWindow,
   detail: { record: Record<string, unknown>; items: Record<string, unknown>[] },
 ) {
-  const title = `Order ${detail.record.record_number || detail.record.id} Items`
-  const win = await createHtmlWindow(parent, title, buildOrderItemsHtml(detail), true)
-  try {
-    await new Promise<void>((resolve, reject) =>
-      win.webContents.print(
-        { silent: false, printBackground: true, landscape: false, pageSize: 'A4' },
-        (success, reason) => (success ? resolve() : reject(new Error(reason || 'PRINT_FAILED'))),
-      ),
-    )
-  } finally {
-    if (!win.isDestroyed()) win.destroy()
-  }
+  const rawOrderNo = String(detail.record.record_number || `ORD-${detail.record.id || '0001'}`)
+  const safeOrderNo = rawOrderNo.replaceAll(/[^a-z0-9_-]/gi, '-')
+  return saveHtmlAsPdf(parent, {
+    title: `Order ${rawOrderNo} - Item List`,
+    defaultFileName: `Order_${safeOrderNo}_Items.pdf`,
+    html: buildOrderItemsHtml(detail),
+    landscape: false,
+  })
 }
 
 export async function revealReport(filePath: string) {
-  const root = path.resolve(reportsDirectory())
   const candidate = path.resolve(filePath)
-  if (!candidate.startsWith(`${root}${path.sep}`)) throw new Error('REPORT_FILE_NOT_FOUND')
+  const ext = path.extname(candidate).toLowerCase()
+  if (ext !== '.pdf' && ext !== '.xlsx') throw new Error('REPORT_FILE_NOT_FOUND')
   try {
     if (!(await stat(candidate)).isFile()) throw new Error('REPORT_FILE_NOT_FOUND')
   } catch {

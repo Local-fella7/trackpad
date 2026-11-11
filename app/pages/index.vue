@@ -12,8 +12,6 @@ const page = ref<Page>('dashboard')
 const user = ref<any>(null)
 const auth = ref<'setup' | 'login' | 'recover'>('login')
 const busy = ref(false)
-const error = ref('')
-const notice = ref('')
 const search = ref('')
 const recordFilter = ref('')
 const recordDateFrom = ref('')
@@ -113,21 +111,34 @@ const stepLabels = ['Order details', 'Items & totals', 'Documents & notes', 'Rev
 
 const fail = (message?: string) => {
   const text = message || 'Something went wrong. Please try again.'
-  error.value = text
-  if (user.value || auth.value === 'login') void Swal.fire({ icon: 'error', title: 'Error', text })
+  void Swal.fire({ icon: 'error', title: 'Error', text, confirmButtonColor: '#76453B' })
   return text
 }
 
 function changeAuth(next: 'setup' | 'login' | 'recover') {
   auth.value = next
-  error.value = ''
   confirmPassword.value = ''
   showPassword.value = false
 }
 
 const notify = (message: string) => {
-  notice.value = message
   void Swal.fire({ icon: 'success', title: message, timer: 2200, showConfirmButton: false })
+}
+
+async function promptSavedFile(title: string, filePath: string) {
+  const result = await Swal.fire({
+    icon: 'success',
+    title,
+    text: `Saved to ${filePath}`,
+    showCancelButton: true,
+    confirmButtonText: 'Open folder',
+    cancelButtonText: 'Done',
+    confirmButtonColor: '#43766C',
+  })
+  if (result.isConfirmed) {
+    const openRes: any = await window.api!.reports!.openFolder(filePath)
+    if (!openRes.ok) fail(openRes.error.message)
+  }
 }
 
 async function timed<T>(name: string, operation: Promise<T>): Promise<T> {
@@ -194,14 +205,18 @@ async function boot() {
 async function signIn() {
   if (needsConfirmation.value && password.value !== confirmPassword.value) return fail('Passwords do not match.')
   busy.value = true
-  error.value = ''
   try {
     let r: any
     if (auth.value === 'setup') {
       const status: any = await window.api!.auth.status()
       if (status.data.hasUser) {
         changeAuth('login')
-        notice.value = 'A workspace already exists. Sign in to continue.'
+        await Swal.fire({
+          icon: 'info',
+          title: 'Workspace exists',
+          text: 'A workspace already exists. Sign in to continue.',
+          confirmButtonColor: '#43766C',
+        })
         return
       }
       r = await timed(
@@ -226,12 +241,24 @@ async function signIn() {
     }
     if (!r.ok) return fail(r.error.message)
     if (auth.value === 'recover') {
-      notice.value = `Password reset. New recovery key: ${r.data.recoveryKey}`
       changeAuth('login')
+      await Swal.fire({
+        icon: 'success',
+        title: 'Password reset',
+        text: `Save your new recovery key: ${r.data.recoveryKey}`,
+        confirmButtonColor: '#43766C',
+      })
       return
     }
     user.value = auth.value === 'setup' ? r.data.user : r.data
-    if (auth.value === 'setup') notice.value = `Workspace created. Save this recovery key: ${r.data.recoveryKey}`
+    if (auth.value === 'setup') {
+      await Swal.fire({
+        icon: 'success',
+        title: 'Workspace created',
+        text: `Save this recovery key: ${r.data.recoveryKey}`,
+        confirmButtonColor: '#43766C',
+      })
+    }
     await load()
     await checkLegacy()
   } catch (reason) {
@@ -249,13 +276,11 @@ async function logout() {
     user.value = null
     credentials.password = ''
     credentials.newPassword = ''
-    notice.value = ''
     changeAuth('login')
   }
 }
 
 async function newOrder() {
-  error.value = ''
   Object.assign(form, empty())
   const number: any = await window.api!.records.nextNumber()
   form.recordNumber = number.ok ? number.data : 'ORD-0001'
@@ -286,8 +311,11 @@ async function printOrder(rowOrId: Row | number) {
   try {
     const r: any = await (window.api!.records as any).printItems(id)
     if (!r.ok) return fail(r.error.message)
+    if (r.data?.path) {
+      await promptSavedFile('Order item list saved as PDF', r.data.path)
+    }
   } catch (reason) {
-    fail(reason instanceof Error ? `Order items could not be printed: ${reason.message}` : 'Order items could not be printed.')
+    fail(reason instanceof Error ? `Order items PDF could not be saved: ${reason.message}` : 'Order items PDF could not be saved.')
   }
 }
 
@@ -351,7 +379,6 @@ function validStep() {
     fail('Each item needs a name, a quantity, and a price.')
     return false
   }
-  error.value = ''
   return true
 }
 
@@ -362,7 +389,6 @@ function next() {
 async function save() {
   if (!validStep()) return
   busy.value = true
-  error.value = ''
   const record = {
     recordDate: form.recordDate,
     recordNumber: form.recordNumber,
@@ -405,7 +431,7 @@ async function freshStart() {
   busy.value = false
   if (!r.ok) return fail(r.error.message)
   legacyPrompt.value = false
-  notice.value = 'Test orders were cleared. You can start with the corrected TZS model.'
+  notify('Test orders were cleared. You can start with the corrected TZS model.')
   await load()
 }
 
@@ -457,14 +483,9 @@ async function exportExcel() {
   try {
     const r: any = await window.api!.reports!.exportExcel(cloneIpcPayload(report.value))
     if (!r.ok) return fail(r.error.message)
-    if (r.data)
-      await Swal.fire({
-        icon: 'success',
-        title: 'Excel report saved',
-        text: r.data,
-        timer: 2600,
-        showConfirmButton: false,
-      })
+    if (r.data) {
+      await promptSavedFile('Excel report saved', r.data)
+    }
   } catch (reason) {
     fail(
       reason instanceof Error
@@ -485,15 +506,10 @@ async function exportPdf() {
       fail(r.error.message)
       return
     }
-    if (!r.data?.path || !r.data?.bytes) throw new Error('The PDF export returned no saved file.')
+    if (!r.data) return
     savedReportPath.value = r.data.path
     savedReportBytes.value = r.data.bytes
-    await Swal.fire({
-      icon: 'success',
-      title: 'PDF report saved',
-      text: `Saved to ${r.data.path}`,
-      confirmButtonText: 'Done',
-    })
+    await promptSavedFile('PDF report saved', r.data.path)
   } catch (reason) {
     fail(
       reason instanceof Error ? `PDF could not be saved: ${reason.message}` : 'PDF could not be saved. Please try again.',
@@ -509,11 +525,15 @@ async function printReport() {
   try {
     const r: any = await window.api!.reports!.print(cloneIpcPayload(report.value))
     if (!r.ok) return fail(r.error.message)
+    if (!r.data) return
+    savedReportPath.value = r.data.path
+    savedReportBytes.value = r.data.bytes
+    await promptSavedFile('PDF report saved', r.data.path)
   } catch (reason) {
     fail(
       reason instanceof Error
-        ? `Report could not be printed: ${reason.message}`
-        : 'Report could not be printed. Please try again.',
+        ? `Report PDF could not be saved: ${reason.message}`
+        : 'Report PDF could not be saved. Please try again.',
     )
   } finally {
     reportBusy.value = ''
@@ -588,12 +608,6 @@ onMounted(boot)
           </button>
         </div>
       </header>
-
-      <div v-if="notice" class="notice">
-        <span>{{ notice }}</span>
-        <button type="button" aria-label="Dismiss notice" @click="notice = ''"><X :size="16" /></button>
-      </div>
-      <p v-if="error && !modal" class="error">{{ error }}</p>
 
       <DashboardView
         v-if="page === 'dashboard'"
@@ -702,10 +716,6 @@ onMounted(boot)
         Confirm password
         <input v-model="confirmPassword" :type="showPassword ? 'text' : 'password'" minlength="6" required />
       </label>
-      <p v-if="needsConfirmation && confirmPassword && password !== confirmPassword" class="error">
-        Passwords do not match.
-      </p>
-      <p v-else-if="error" class="error">{{ error }}</p>
       <button class="primary auth-submit" :disabled="busy">
         {{
           busy
@@ -861,8 +871,6 @@ onMounted(boot)
 
       <form @submit.prevent="step === 4 ? save() : next()">
         <div class="body">
-          <p v-if="error" class="error">{{ error }}</p>
-
           <!-- Step 1 -->
           <fieldset v-if="step === 1">
             <div class="fields">

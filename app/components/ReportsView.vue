@@ -323,10 +323,10 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
             type="button"
             class="btn btn-light"
             :disabled="Boolean(busyAction) || !report"
-            title="Print formal report"
+            title="Save formal report as PDF"
             @click="emit('print')"
           >
-            <Printer :size="16" /> {{ busyAction === 'print' ? 'Opening printer...' : 'Print' }}
+            <Printer :size="16" /> {{ busyAction === 'print' ? 'Saving PDF...' : 'Print' }}
           </button>
           <button
             type="button"
@@ -373,17 +373,6 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
               </div>
             </div>
           </header>
-
-          <div v-if="savedPath" class="save-success">
-            <FileText :size="19" />
-            <span>
-              <b>PDF report saved successfully ({{ fileSize(savedBytes) }})</b>
-              <small>{{ savedPath }}</small>
-            </span>
-            <button type="button" class="btn btn-sm btn-light" @click="emit('open-folder')">
-              <FolderOpen :size="15" /> Open folder
-            </button>
-          </div>
 
           <div class="table-responsive report-table-wrap">
             <table class="table report-table align-middle">
