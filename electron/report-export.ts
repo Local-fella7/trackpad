@@ -117,12 +117,13 @@ export async function exportExcel(window: MainWindow, report: Report) {
   })
 
   report.rows.forEach(row => {
-    sheet.addRow(
+    const addedRow = sheet.addRow(
       columns.map(col => {
         if (col.kind === 'money' || col.kind === 'number') return Number(row[col.key] || 0)
         return formatCellValue(col, row[col.key])
       }),
     )
+    addedRow.alignment = { vertical: 'top', wrapText: true }
   })
 
   if (report.rows.length) {
@@ -195,7 +196,7 @@ function buildReportHtml(report: Report) {
     .meta{text-align:right}
     table{width:100%;border-collapse:collapse;table-layout:fixed}
     th{background:#43766C;color:#F8FAE5;text-align:left;padding:7px 6px;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border:1px solid #355f57}
-    td{border:1px solid #E5DEC9;padding:6px 6px;overflow-wrap:anywhere;vertical-align:top;font-size:9px}
+    td{border:1px solid #E5DEC9;padding:6px 6px;overflow-wrap:anywhere;vertical-align:top;font-size:9px;white-space:pre-line;line-height:1.5}
     tbody tr:nth-child(even) td{background:#FBFCF4}
     tfoot td{background:#F8FAE5;border-top:2px solid #43766C;border-bottom:2px solid #43766C;font-weight:800;font-size:9.5px;color:#26211D;padding:8px 6px}
     .num{text-align:right;white-space:nowrap}

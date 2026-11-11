@@ -23,7 +23,7 @@ export interface ReportColumn {
 }
 
 const paidSubquery = `COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id = r.id), 0)`
-const itemsSubquery = `COALESCE((SELECT GROUP_CONCAT(ri.description || ' x' || CAST(ri.quantity_x100 / 100 AS INTEGER), ', ') FROM record_items ri WHERE ri.record_id = r.id), '-')`
+const itemsSubquery = `COALESCE((SELECT GROUP_CONCAT('• ' || ri.description || ' (x' || CAST(ri.quantity_x100 / 100 AS INTEGER) || ')', char(10)) FROM record_items ri WHERE ri.record_id = r.id), '-')`
 
 const baseSelect = `SELECT
   r.*,

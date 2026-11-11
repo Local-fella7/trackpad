@@ -352,7 +352,10 @@ const activityBars = computed(() => {
         <div class="heading">
           <div>
             <span class="eyebrow">Operations</span>
-            <h2>Upcoming Events</h2>
+            <h2>
+              Upcoming Events
+              <em v-if="dashboard?.upcomingEvents?.length" class="count-pill">{{ dashboard.upcomingEvents.length }}</em>
+            </h2>
             <small>Events scheduled over the next 30 days (Confirmed in Teal · Pending in Tan)</small>
           </div>
           <button type="button" class="link-btn" @click="emit('filter', '')">
@@ -360,9 +363,9 @@ const activityBars = computed(() => {
           </button>
         </div>
 
-        <div v-if="dashboard?.upcomingEvents?.length" class="event-list">
+        <div v-if="dashboard?.upcomingEvents?.length" class="event-list scrollable-list">
           <button
-            v-for="event in dashboard.upcomingEvents.slice(0, 6)"
+            v-for="event in dashboard.upcomingEvents"
             :key="event.id"
             type="button"
             class="event-row"
@@ -390,15 +393,18 @@ const activityBars = computed(() => {
         <div class="heading">
           <div>
             <span class="eyebrow">Receivables</span>
-            <h2>Outstanding Clients</h2>
+            <h2>
+              Outstanding Clients
+              <em v-if="dashboard?.outstandingClients?.length" class="count-pill rust">{{ dashboard.outstandingClients.length }}</em>
+            </h2>
           </div>
           <button v-if="dashboard?.outstandingClients?.length" type="button" class="link-btn" @click="emit('filter', 'unpaid')">
             Review <ArrowUpRight :size="14" />
           </button>
         </div>
-        <div v-if="dashboard?.outstandingClients?.length" class="client-list">
+        <div v-if="dashboard?.outstandingClients?.length" class="client-list scrollable-list">
           <button
-            v-for="client in dashboard.outstandingClients.slice(0, 5)"
+            v-for="client in dashboard.outstandingClients"
             :key="client.client_name"
             type="button"
             class="action-row"
@@ -420,11 +426,14 @@ const activityBars = computed(() => {
         <div class="heading">
           <div>
             <span class="eyebrow">Relationships</span>
-            <h2>Top Clients by Value</h2>
+            <h2>
+              Top Clients by Value
+              <em v-if="dashboard?.topClients?.length" class="count-pill">{{ dashboard.topClients.length }}</em>
+            </h2>
           </div>
           <Users :size="18" class="muted-icon" />
         </div>
-        <div v-if="dashboard?.topClients?.length" class="rank-list">
+        <div v-if="dashboard?.topClients?.length" class="rank-list scrollable-list">
           <div v-for="(client, idx) in dashboard.topClients" :key="client.client_name" class="rank">
             <div class="rank-top">
               <span class="rank-name"><b>#{{ idx + 1 }}</b> {{ client.client_name }}</span>
@@ -1019,7 +1028,54 @@ const activityBars = computed(() => {
   margin-top: 3px;
 }
 
-/* Upcoming Events */
+/* Upcoming Events & Scrollable Card Lists */
+.count-pill {
+  display: inline-grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  margin-left: 6px;
+  border-radius: 99px;
+  background: #E9F1EF;
+  color: #43766C;
+  vertical-align: middle;
+}
+
+.count-pill.rust {
+  background: #F6ECEA;
+  color: #76453B;
+}
+
+.scrollable-list {
+  max-height: 265px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #B19470 #F8FAE5;
+}
+
+.scrollable-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable-list::-webkit-scrollbar-track {
+  background: #F8FAE5;
+  border-radius: 99px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb {
+  background: #B19470;
+  border-radius: 99px;
+}
+
+.scrollable-list::-webkit-scrollbar-thumb:hover {
+  background: #43766C;
+}
+
 .event-list {
   display: grid;
   gap: 8px;

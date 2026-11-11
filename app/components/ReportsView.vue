@@ -834,6 +834,9 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
   padding: 11px 14px;
   border-color: #EFECE0;
   color: #26211D;
+  white-space: pre-line;
+  line-height: 1.55;
+  vertical-align: top;
 }
 
 .report-table tbody tr:nth-child(even) td {

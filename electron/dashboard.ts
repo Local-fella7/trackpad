@@ -115,12 +115,12 @@ export function getDashboardData(db: Database.Database, today: string, activityD
     .all()
   const topClients = db
     .prepare(
-      `SELECT client_name, COALESCE(SUM(grand_total_minor),0) AS total FROM records WHERE deleted_at IS NULL GROUP BY client_name ORDER BY total DESC LIMIT 5`,
+      `SELECT client_name, COALESCE(SUM(grand_total_minor),0) AS total FROM records WHERE deleted_at IS NULL GROUP BY client_name ORDER BY total DESC LIMIT 50`,
     )
     .all()
   const outstandingClients = db
     .prepare(
-      `SELECT r.client_name, COUNT(*) AS orders, SUM(r.grand_total_minor-COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)) AS balance_minor FROM records r JOIN statuses s ON s.id=r.status_id WHERE r.deleted_at IS NULL AND LOWER(s.name)<> 'cancelled' GROUP BY r.client_name HAVING balance_minor>0 ORDER BY balance_minor DESC LIMIT 8`,
+      `SELECT r.client_name, COUNT(*) AS orders, SUM(r.grand_total_minor-COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)) AS balance_minor FROM records r JOIN statuses s ON s.id=r.status_id WHERE r.deleted_at IS NULL AND LOWER(s.name)<> 'cancelled' GROUP BY r.client_name HAVING balance_minor>0 ORDER BY balance_minor DESC LIMIT 50`,
     )
     .all()
   const currentTotal = Number((monthSummary[0] as { total?: number } | undefined)?.total ?? 0)
