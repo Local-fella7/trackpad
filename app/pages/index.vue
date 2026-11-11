@@ -64,7 +64,7 @@ const empty = () => ({
   orderFormNo: '',
   deliveryFormNo: '',
   statusId: 0,
-  taxRateBasisPoints: 0,
+  discountMinor: 0,
   notes: '',
   items: [{ description: '', quantity: 1, unitPrice: 0 }],
 })
@@ -73,8 +73,8 @@ const form = reactive(empty())
 const subtotal = computed(() =>
   form.items.reduce((sum, item) => sum + Math.round(Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0),
 )
-const tax = computed(() => Math.round((subtotal.value * Number(form.taxRateBasisPoints || 0)) / 10000))
-const total = computed(() => subtotal.value + tax.value)
+const discount = computed(() => Math.max(0, Math.min(subtotal.value, Math.round(Number(form.discountMinor || 0)))))
+const total = computed(() => Math.max(0, subtotal.value - discount.value))
 
 const money = (n: number) => `${new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(n) || 0)} TZS`
 const date = (value?: string) => formatDate(value, '—')
@@ -258,7 +258,7 @@ async function newOrder() {
   error.value = ''
   Object.assign(form, empty())
   const number: any = await window.api!.records.nextNumber()
-  form.recordNumber = number.ok ? number.data : 'REC-0001'
+  form.recordNumber = number.ok ? number.data : 'ORD-0001'
   form.statusId = statuses.value.find(s => s.is_default)?.id || statuses.value[0]?.id || 0
   editId.value = null
   step.value = 1
@@ -326,7 +326,7 @@ async function edit(row: Row) {
     orderFormNo: x.order_form_no || '',
     deliveryFormNo: x.delivery_form_no || '',
     statusId: x.status_id,
-    taxRateBasisPoints: x.tax_rate_bp,
+    discountMinor: Number(x.discount_minor || 0),
     notes: x.notes || '',
     items: r.data.items.map((i: any) => ({
       description: i.description,
@@ -377,7 +377,7 @@ async function save() {
     deliveryFormNo: form.deliveryFormNo,
     statusId: Number(form.statusId),
     currency: 'TZS',
-    taxRateBasisPoints: Number(form.taxRateBasisPoints),
+    discountMinor: Number(form.discountMinor || 0),
     notes: form.notes,
   }
   const items = cloneRecordItems(form.items)
@@ -805,7 +805,7 @@ onMounted(boot)
             </span>
           </div>
           <div class="review-item total-bar">
-            <span>Subtotal: {{ money(viewDetail.record.subtotal_minor) }} · Tax: {{ money(viewDetail.record.tax_minor) }}</span>
+            <span>Subtotal: {{ money(viewDetail.record.subtotal_minor) }} · Discount: {{ money(viewDetail.record.discount_minor || 0) }}</span>
             <strong>GRAND TOTAL: {{ money(viewDetail.record.grand_total_minor) }}</strong>
           </div>
         </div>
@@ -908,17 +908,23 @@ onMounted(boot)
             </button>
             <div class="totals">
               <label>
-                Tax (%)
+                Discount (TZS)
                 <input
-                  :value="form.taxRateBasisPoints / 100"
+                  v-model.number="form.discountMinor"
                   type="number"
                   min="0"
-                  @input="form.taxRateBasisPoints = Number(($event.target as HTMLInputElement).value) * 100"
+                  :max="subtotal"
+                  step="1"
+                  placeholder="0"
                 />
               </label>
               <div>
                 <small>Subtotal</small>
                 <b>{{ money(subtotal) }}</b>
+              </div>
+              <div v-if="discount > 0">
+                <small>Discount</small>
+                <b>- {{ money(discount) }}</b>
               </div>
               <div class="grand-box">
                 <small>Grand Total</small>

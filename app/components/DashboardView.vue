@@ -66,10 +66,11 @@ const monthCells = computed(() => {
     confirmedCount: number
     pendingCount: number
     totalCount: number
+    clientsList: string[]
   }> = []
 
   for (let i = 0; i < startOffset; i++) {
-    cells.push({ key: `pad-start-${i}`, day: null, confirmedCount: 0, pendingCount: 0, totalCount: 0 })
+    cells.push({ key: `pad-start-${i}`, day: null, confirmedCount: 0, pendingCount: 0, totalCount: 0, clientsList: [] })
   }
 
   const today = todayIso()
@@ -80,6 +81,12 @@ const monthCells = computed(() => {
     const confirmedCount = Number(match?.confirmed_count || 0)
     const pendingCount = Number(match?.pending_count || 0)
     const totalCount = Number(match?.count || confirmedCount + pendingCount)
+    const clientsList = match?.clients_list
+      ? String(match.clients_list)
+          .split(' · ')
+          .map(s => s.trim())
+          .filter(Boolean)
+      : []
     cells.push({
       key: dateStr,
       day,
@@ -88,6 +95,7 @@ const monthCells = computed(() => {
       confirmedCount,
       pendingCount,
       totalCount,
+      clientsList,
     })
   }
 
@@ -96,11 +104,12 @@ const monthCells = computed(() => {
 
 const statusList = computed(() => {
   const palette: Record<string, string> = {
-    Confirmed: '#43766C',
     Pending: '#B19470',
+    Confirmed: '#43766C',
+    Completed: '#2d504a',
     Cancelled: '#76453B',
   }
-  return ['Confirmed', 'Pending', 'Cancelled'].map(name => {
+  return ['Pending', 'Confirmed', 'Completed', 'Cancelled'].map(name => {
     const match = props.dashboard?.byStatus?.find((x: any) => x.name === name)
     return {
       name,
@@ -247,21 +256,32 @@ const activityBars = computed(() => {
               'has-mixed': cell.confirmedCount > 0 && cell.pendingCount > 0,
             }"
             :title="
-              cell.dateStr
-                ? `${formatDate(cell.dateStr)} · Confirmed: ${cell.confirmedCount}, Pending: ${cell.pendingCount}`
-                : ''
+              cell.dateStr && cell.totalCount > 0
+                ? `${formatDate(cell.dateStr)} · Clients: ${cell.clientsList.join(', ')}`
+                : cell.dateStr
+                  ? formatDate(cell.dateStr)
+                  : ''
             "
             @click="cell.totalCount > 0 ? emit('filter', '') : undefined"
           >
             <template v-if="cell.day !== null">
-              <span class="day-num">{{ cell.day }}</span>
-              <div v-if="cell.totalCount > 0" class="day-badges">
-                <em v-if="cell.confirmedCount > 0" class="badge-confirmed" :title="`${cell.confirmedCount} confirmed`">
-                  {{ cell.confirmedCount }}
-                </em>
-                <em v-if="cell.pendingCount > 0" class="badge-pending" :title="`${cell.pendingCount} pending`">
-                  {{ cell.pendingCount }}
-                </em>
+              <div class="day-top-row">
+                <span class="day-num">{{ cell.day }}</span>
+                <div v-if="cell.totalCount > 0" class="day-badges">
+                  <em v-if="cell.confirmedCount > 0" class="badge-confirmed">
+                    {{ cell.confirmedCount }}
+                  </em>
+                  <em v-if="cell.pendingCount > 0" class="badge-pending">
+                    {{ cell.pendingCount }}
+                  </em>
+                </div>
+              </div>
+              <small v-if="cell.clientsList.length" class="day-client-preview">
+                {{ cell.clientsList[0]?.replace(/\s*\([^)]*\)$/, '') }}
+              </small>
+              <div v-if="cell.clientsList.length" class="day-hover-popover">
+                <strong>{{ formatDate(cell.dateStr) }}</strong>
+                <span v-for="(clientItem, cIdx) in cell.clientsList" :key="cIdx">{{ clientItem }}</span>
               </div>
             </template>
           </div>
@@ -768,7 +788,8 @@ const activityBars = computed(() => {
 }
 
 .day-cell {
-  min-height: 54px;
+  position: relative;
+  min-height: 56px;
   border: 1px solid #EFECE0;
   border-radius: 9px;
   background: #FBFCF4;
@@ -777,6 +798,61 @@ const activityBars = computed(() => {
   flex-direction: column;
   justify-content: space-between;
   transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.day-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px;
+}
+
+.day-client-preview {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  color: #26211D;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.day-hover-popover {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  min-width: 170px;
+  max-width: 240px;
+  background: #26211D;
+  color: #F8FAE5;
+  padding: 8px 10px;
+  border-radius: 9px;
+  box-shadow: 0 10px 24px rgba(38, 33, 29, 0.28);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.day-hover-popover strong {
+  display: block;
+  font-size: 10px;
+  color: #B19470;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(248, 250, 229, 0.15);
+  padding-bottom: 3px;
+}
+
+.day-hover-popover span {
+  display: block;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.day-cell:hover .day-hover-popover {
+  display: block;
 }
 
 .day-cell.empty {

@@ -113,4 +113,15 @@ export const migrations = [
       SELECT 'Cancelled','#dc2626',3,0,1,1 WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(name)='cancelled');
     UPDATE records SET status_id = (SELECT id FROM statuses WHERE LOWER(name)='pending') WHERE status_id IN (SELECT id FROM statuses WHERE LOWER(name) NOT IN ('pending','confirmed','cancelled') AND is_active=0);
   `,
+  `
+    ALTER TABLE records ADD COLUMN discount_minor INTEGER NOT NULL DEFAULT 0;
+    UPDATE records SET record_number = 'ORD-' || SUBSTR(record_number, 5) WHERE record_number GLOB 'REC-[0-9]*';
+    INSERT OR IGNORE INTO statuses (name, color, sort_order, is_default, is_active, exclude_from_totals)
+      SELECT 'Completed', '#2d504a', 3, 0, 1, 0 WHERE NOT EXISTS (SELECT 1 FROM statuses WHERE LOWER(name) = 'completed');
+    UPDATE statuses SET is_active = 1, color = '#43766C', sort_order = 2 WHERE LOWER(name) = 'confirmed';
+    UPDATE statuses SET is_active = 1, color = '#B19470', sort_order = 1 WHERE LOWER(name) = 'pending';
+    UPDATE statuses SET is_active = 1, color = '#2d504a', sort_order = 3 WHERE LOWER(name) = 'completed';
+    UPDATE statuses SET is_active = 1, color = '#76453B', sort_order = 4, exclude_from_totals = 1 WHERE LOWER(name) = 'cancelled';
+    UPDATE statuses SET is_active = 0 WHERE LOWER(name) NOT IN ('pending', 'confirmed', 'completed', 'cancelled');
+  `,
 ]

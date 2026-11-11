@@ -5,6 +5,10 @@ export function asIpcError(error: unknown): IpcError {
   const code = error instanceof Error ? error.message : 'UNEXPECTED_ERROR'
   const messages: Record<string, string> = {
     INVALID_INPUT: 'Please check the information you entered.',
+    INVALID_RECORD: 'Please check the order details and items you entered.',
+    INVALID_PAYMENT: 'Please enter a valid payment amount and date.',
+    PAYMENT_EXCEEDS_BALANCE: 'The payment amount cannot exceed the remaining order balance.',
+    PAID_RECORD_LOCKED: 'Paid orders are locked from financial edits.',
     INVALID_CREDENTIALS: 'The username or password is incorrect.',
     LOGIN_THROTTLED: 'Too many attempts. Please wait 30 seconds and try again.',
     SETUP_ALREADY_COMPLETE: 'A user has already been created.',

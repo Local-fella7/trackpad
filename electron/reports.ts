@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { syncCompletedOrders } from './db/repos/records'
 
 export const reportTypes = [
   'general',
@@ -54,6 +55,7 @@ const summary = (db: Database.Database, where: string, params: unknown[]) =>
     .all(...params)
 
 export function getReportData(db: Database.Database, type: ReportType, params: ReportParams = {}) {
+  syncCompletedOrders(db)
   const day = params.day ?? new Date().toISOString().slice(0, 10)
   const month = params.month ?? day.slice(0, 7)
   const days = Math.max(1, Math.min(params.days ?? 7, 365))
@@ -90,7 +92,7 @@ export function getReportData(db: Database.Database, type: ReportType, params: R
       { key: 'items_summary', label: 'Items / Services', kind: 'text' },
       { key: 'status_name', label: 'Status', kind: 'text' },
       { key: 'subtotal_minor', label: 'Subtotal', kind: 'money', total: true },
-      { key: 'tax_minor', label: 'Tax', kind: 'money', total: true },
+      { key: 'discount_minor', label: 'Discount', kind: 'money', total: true },
       { key: 'grand_total_minor', label: 'Total Amount', kind: 'money', total: true },
       { key: 'paid_minor', label: 'Amount Paid', kind: 'money', total: true },
       { key: 'balance_minor', label: 'Balance Due', kind: 'money', total: true },
@@ -205,7 +207,7 @@ export function getReportData(db: Database.Database, type: ReportType, params: R
 
   if (type === 'status-summary') {
     const normalizedStatus =
-      "CASE WHEN LOWER(s.name)='cancelled' THEN 'Cancelled' WHEN LOWER(s.name) IN ('confirmed','paid','delivered','proforma sent','invoiced') OR r.confirmed_at IS NOT NULL THEN 'Confirmed' ELSE 'Pending' END"
+      "CASE WHEN LOWER(s.name)='cancelled' THEN 'Cancelled' WHEN LOWER(s.name)='completed' THEN 'Completed' WHEN LOWER(s.name) IN ('confirmed','paid','delivered','proforma sent','invoiced') OR r.confirmed_at IS NOT NULL THEN 'Confirmed' ELSE 'Pending' END"
     const rows = db
       .prepare(
         `SELECT
@@ -217,8 +219,9 @@ export function getReportData(db: Database.Database, type: ReportType, params: R
           'TZS' AS currency
         FROM statuses s
         LEFT JOIN records r ON r.status_id = s.id AND r.deleted_at IS NULL
+        WHERE s.is_active = 1
         GROUP BY status_name
-        ORDER BY CASE status_name WHEN 'Pending' THEN 1 WHEN 'Confirmed' THEN 2 ELSE 3 END`,
+        ORDER BY CASE status_name WHEN 'Pending' THEN 1 WHEN 'Confirmed' THEN 2 WHEN 'Completed' THEN 3 ELSE 4 END`,
       )
       .all()
     const columns: ReportColumn[] = [

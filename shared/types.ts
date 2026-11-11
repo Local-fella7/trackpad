@@ -11,6 +11,7 @@ export interface ItemInput {
 
 export interface Totals {
   subtotal: number
+  discount: number
   tax: number
   grandTotal: number
 }

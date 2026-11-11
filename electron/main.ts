@@ -174,8 +174,8 @@ app.whenReady().then(() => {
   ipcMain.handle('billing:payments', (_event, recordId: unknown) => toIpcResult(() => { requireSessionUser(); return listPayments(database!, Number(recordId)) }))
   ipcMain.handle('billing:add', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser(); const value=input as Record<string,unknown>|null
-    if (!value || !Number.isInteger(value.recordId) || !Number.isInteger(value.amountMinor) || typeof value.paymentDate !== 'string') throw new Error('INVALID_INPUT')
-    return addPayment(database!, {recordId:Number(value.recordId),amountMinor:Number(value.amountMinor),paymentDate:value.paymentDate,method:typeof value.method==='string'?value.method:undefined,reference:typeof value.reference==='string'?value.reference:undefined,notes:typeof value.notes==='string'?value.notes:undefined})
+    if (!value || !Number.isInteger(Number(value.recordId)) || !(Number(value.amountMinor) > 0) || typeof value.paymentDate !== 'string') throw new Error('INVALID_PAYMENT')
+    return addPayment(database!, {recordId:Number(value.recordId),amountMinor:Math.round(Number(value.amountMinor)),paymentDate:value.paymentDate,method:typeof value.method==='string'?value.method:undefined,reference:typeof value.reference==='string'?value.reference:undefined,notes:typeof value.notes==='string'?value.notes:undefined})
   }))
   ipcMain.handle('billing:delete', (_event, id: unknown) => toIpcResult(() => { requireSessionUser(); return deletePayment(database!, Number(id)) }))
   ipcMain.handle('statuses:list', () => toIpcResult(() => { requireSessionUser(); return listStatuses(database!) }))

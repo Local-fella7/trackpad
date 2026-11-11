@@ -309,8 +309,8 @@ function buildOrderItemsHtml(detail: { record: Record<string, unknown>; items: R
           <td class="num">${escapeHtml(formatNumber(r.subtotal_minor))} TZS</td>
         </tr>
         <tr>
-          <td colspan="4">Tax (${Number(r.tax_rate_bp || 0) / 100}%)</td>
-          <td class="num">${escapeHtml(formatNumber(r.tax_minor))} TZS</td>
+          <td colspan="4">Discount</td>
+          <td class="num">- ${escapeHtml(formatNumber(r.discount_minor || 0))} TZS</td>
         </tr>
         <tr class="grand">
           <td colspan="4">GRAND TOTAL</td>
