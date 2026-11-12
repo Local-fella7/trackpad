@@ -18,7 +18,7 @@ const recordDateFrom = ref('')
 const recordDateTo = ref('')
 const recordStatus = ref('')
 const recordPage = ref(1)
-const recordPageSize = ref(25)
+const recordPageSize = ref(10)
 const recordTotal = ref(0)
 const recordTotalPages = ref(1)
 const rows = ref<Row[]>([])
@@ -567,6 +567,10 @@ async function updateRecords(value: Record<string, any>) {
   if ('dateTo' in value) recordDateTo.value = value.dateTo
   if ('status' in value) recordStatus.value = value.status
   if ('page' in value) recordPage.value = value.page
+  if ('pageSize' in value) {
+    recordPageSize.value = Number(value.pageSize) || 10
+    recordPage.value = 1
+  }
   await load()
 }
 
@@ -892,20 +896,22 @@ onMounted(boot)
               <span>LINE AMOUNT</span>
               <span></span>
             </div>
-            <div v-for="(item, index) in form.items" :key="index" class="item">
-              <input v-model="item.description" placeholder="Item or service description" required />
-              <input v-model.number="item.quantity" type="number" min="1" step="1" />
-              <input v-model.number="item.unitPrice" type="number" min="0" step="1" />
-              <strong>{{ money(item.quantity * item.unitPrice) }}</strong>
-              <button
-                type="button"
-                class="remove-item"
-                title="Remove item"
-                :disabled="form.items.length === 1"
-                @click="form.items.splice(index, 1)"
-              >
-                <Trash2 :size="15" />
-              </button>
+            <div class="items-list">
+              <div v-for="(item, index) in form.items" :key="index" class="item">
+                <input v-model="item.description" placeholder="Item or service description" required />
+                <input v-model.number="item.quantity" type="number" min="1" step="1" />
+                <input v-model.number="item.unitPrice" type="number" min="0" step="1" />
+                <strong>{{ money(item.quantity * item.unitPrice) }}</strong>
+                <button
+                  type="button"
+                  class="remove-item"
+                  title="Remove item"
+                  :disabled="form.items.length === 1"
+                  @click="form.items.splice(index, 1)"
+                >
+                  <Trash2 :size="15" />
+                </button>
+              </div>
             </div>
             <button
               type="button"
@@ -1465,9 +1471,56 @@ textarea,
   color: #F8FAE5;
 }
 
+.modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal .body,
 .body {
-  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px 26px 24px;
+}
+
+.items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 6px;
+  margin-top: 8px;
+}
+
+.items-list .item {
+  margin-top: 0;
+}
+
+.items-list::-webkit-scrollbar,
+.modal .body::-webkit-scrollbar {
+  width: 7px;
+}
+
+.items-list::-webkit-scrollbar-track,
+.modal .body::-webkit-scrollbar-track {
+  background: #F8FAE5;
+  border-radius: 4px;
+}
+
+.items-list::-webkit-scrollbar-thumb,
+.modal .body::-webkit-scrollbar-thumb {
+  background: #B19470;
+  border-radius: 4px;
+}
+
+.items-list::-webkit-scrollbar-thumb:hover,
+.modal .body::-webkit-scrollbar-thumb:hover {
+  background: #43766C;
 }
 
 fieldset {
@@ -1664,6 +1717,7 @@ fieldset {
 
 .modal-footer,
 .dialog footer {
+  flex-shrink: 0;
   padding: 16px 26px;
   display: flex;
   justify-content: flex-end;

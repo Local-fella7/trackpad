@@ -5,6 +5,10 @@ import {
   BarChart3,
   CalendarClock,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Download,
   FileSpreadsheet,
   FileText,
@@ -195,6 +199,39 @@ const formatCell = (col: ColumnDef, value: unknown) => {
 }
 
 const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) => sum + (Number(row[key]) || 0), 0)
+
+const page = ref(1)
+const pageSize = ref(15)
+
+const totalRows = computed(() => props.report?.rows?.length || 0)
+const totalPages = computed(() =>
+  pageSize.value === -1 ? 1 : Math.max(1, Math.ceil(totalRows.value / pageSize.value)),
+)
+
+const visibleRows = computed(() => {
+  if (!props.report?.rows?.length) return []
+  if (pageSize.value === -1) return props.report.rows
+  const start = (page.value - 1) * pageSize.value
+  return props.report.rows.slice(start, start + pageSize.value)
+})
+
+const pages = computed(() =>
+  Array.from(
+    { length: Math.min(totalPages.value, 5) },
+    (_, index) => Math.max(1, Math.min(totalPages.value - 4, page.value - 2)) + index,
+  ),
+)
+
+watch(
+  () => [props.type, props.day, props.month, props.days, props.report],
+  () => {
+    page.value = 1
+  },
+)
+
+watch([totalPages, totalRows], () => {
+  if (page.value > totalPages.value) page.value = Math.max(1, totalPages.value)
+})
 </script>
 
 <template>
@@ -388,7 +425,7 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(row, index) in report.rows" :key="row.id || index">
+                <tr v-for="(row, index) in visibleRows" :key="row.id || index">
                   <td
                     v-for="col in columns(report)"
                     :key="col.key"
@@ -397,7 +434,7 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
                     {{ formatCell(col, row[col.key]) }}
                   </td>
                 </tr>
-                <tr v-if="!report.rows?.length">
+                <tr v-if="!visibleRows?.length">
                   <td :colspan="columns(report).length" class="empty-table">No records match this report period.</td>
                 </tr>
               </tbody>
@@ -421,6 +458,74 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
                 </tr>
               </tfoot>
             </table>
+          </div>
+
+          <div v-if="totalRows > 0" class="report-pagination-bar">
+            <div class="pagination-info">
+              <span>
+                Showing {{ pageSize === -1 ? 1 : (page - 1) * pageSize + 1 }}–{{
+                  pageSize === -1 ? totalRows : Math.min(page * pageSize, totalRows)
+                }} of {{ totalRows }} records
+              </span>
+              <label class="page-size-selector">
+                <span>Rows per page:</span>
+                <select v-model.number="pageSize" class="form-select form-select-sm" @change="page = 1">
+                  <option :value="10">10</option>
+                  <option :value="15">15</option>
+                  <option :value="25">25</option>
+                  <option :value="50">50</option>
+                  <option :value="-1">All</option>
+                </select>
+              </label>
+            </div>
+
+            <div v-if="pageSize !== -1 && totalPages > 1" class="pagination-controls">
+              <button
+                type="button"
+                :disabled="page <= 1"
+                title="First page"
+                aria-label="First page"
+                @click="page = 1"
+              >
+                <ChevronsLeft :size="16" />
+              </button>
+              <button
+                type="button"
+                :disabled="page <= 1"
+                title="Previous page"
+                aria-label="Previous page"
+                @click="page--"
+              >
+                <ChevronLeft :size="16" />
+              </button>
+              <button
+                v-for="item in pages"
+                :key="item"
+                type="button"
+                :class="{ active: item === page }"
+                @click="page = item"
+              >
+                {{ item }}
+              </button>
+              <button
+                type="button"
+                :disabled="page >= totalPages"
+                title="Next page"
+                aria-label="Next page"
+                @click="page++"
+              >
+                <ChevronRight :size="16" />
+              </button>
+              <button
+                type="button"
+                :disabled="page >= totalPages"
+                title="Last page"
+                aria-label="Last page"
+                @click="page = totalPages"
+              >
+                <ChevronsRight :size="16" />
+              </button>
+            </div>
           </div>
 
           <footer>
@@ -857,6 +962,86 @@ const sumColumn = (rows: any[], key: string) => (rows || []).reduce((sum, row) =
   text-align: center;
   color: #73685D;
   padding: 45px !important;
+}
+
+.report-pagination-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #E5DEC9;
+  padding: 12px 24px;
+  color: #73685D;
+  font-size: 12px;
+  background: #FBFCF4;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-size-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #73685D;
+}
+
+.page-size-selector select {
+  padding: 3px 24px 3px 8px;
+  font-size: 12px;
+  border: 1px solid #E5DEC9;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #26211D;
+  cursor: pointer;
+}
+
+.page-size-selector select:focus {
+  border-color: #43766C;
+  outline: none;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.report-pagination-bar button {
+  min-width: 32px;
+  height: 32px;
+  border: 1px solid #E5DEC9;
+  background: #fff;
+  border-radius: 8px;
+  color: #26211D;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.report-pagination-bar button:hover:not(:disabled) {
+  background: #F8FAE5;
+  border-color: #43766C;
+  color: #43766C;
+}
+
+.report-pagination-bar button.active {
+  background: #43766C;
+  color: #F8FAE5;
+  border-color: #43766C;
+}
+
+.report-pagination-bar button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .preview-card footer {

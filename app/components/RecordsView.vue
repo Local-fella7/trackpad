@@ -4,6 +4,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Edit3,
   Eye,
   Filter,
@@ -248,9 +250,40 @@ const toggle = (key: string) => {
     </div>
 
     <footer class="pagination-bar">
-      <span>Showing {{ total ? (page - 1) * pageSize + 1 : 0 }}–{{ Math.min(page * pageSize, total) }} of {{ total }}</span>
-      <div>
-        <button type="button" :disabled="page === 1" @click="update({ page: page - 1 })"><ChevronLeft :size="16" /></button>
+      <div class="pagination-info">
+        <span>Showing {{ total ? (page - 1) * pageSize + 1 : 0 }}–{{ Math.min(page * pageSize, total) }} of {{ total }}</span>
+        <label class="page-size-selector">
+          <span>Rows per page:</span>
+          <select
+            :value="pageSize"
+            @change="update({ pageSize: Number(($event.target as HTMLSelectElement).value), page: 1 })"
+          >
+            <option :value="10">10</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </label>
+      </div>
+      <div class="pagination-controls">
+        <button
+          type="button"
+          :disabled="page <= 1"
+          title="First page"
+          aria-label="First page"
+          @click="update({ page: 1 })"
+        >
+          <ChevronsLeft :size="16" />
+        </button>
+        <button
+          type="button"
+          :disabled="page <= 1"
+          title="Previous page"
+          aria-label="Previous page"
+          @click="update({ page: page - 1 })"
+        >
+          <ChevronLeft :size="16" />
+        </button>
         <button
           v-for="item in pages"
           :key="item"
@@ -260,8 +293,23 @@ const toggle = (key: string) => {
         >
           {{ item }}
         </button>
-        <button type="button" :disabled="page === totalPages" @click="update({ page: page + 1 })">
+        <button
+          type="button"
+          :disabled="page >= totalPages"
+          title="Next page"
+          aria-label="Next page"
+          @click="update({ page: page + 1 })"
+        >
           <ChevronRight :size="16" />
+        </button>
+        <button
+          type="button"
+          :disabled="page >= totalPages"
+          title="Last page"
+          aria-label="Last page"
+          @click="update({ page: totalPages })"
+        >
+          <ChevronsRight :size="16" />
         </button>
       </div>
     </footer>
@@ -549,9 +597,41 @@ const toggle = (key: string) => {
   color: #73685D;
   font-size: 12px;
   background: #FBFCF4;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.pagination-bar div {
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-size-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #73685D;
+}
+
+.page-size-selector select {
+  padding: 3px 24px 3px 8px;
+  font-size: 12px;
+  border: 1px solid #E5DEC9;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #26211D;
+  cursor: pointer;
+}
+
+.page-size-selector select:focus {
+  border-color: #43766C;
+  outline: none;
+}
+
+.pagination-controls {
   display: flex;
   gap: 5px;
 }
@@ -567,6 +647,14 @@ const toggle = (key: string) => {
   place-items: center;
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination-bar button:hover:not(:disabled) {
+  background: #F8FAE5;
+  border-color: #43766C;
+  color: #43766C;
 }
 
 .pagination-bar button.active {
@@ -577,6 +665,7 @@ const toggle = (key: string) => {
 
 .pagination-bar button:disabled {
   opacity: 0.45;
+  cursor: not-allowed;
 }
 
 @media (max-width: 1100px) {

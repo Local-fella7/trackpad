@@ -3,6 +3,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   Filter,
   Plus,
@@ -33,7 +35,7 @@ const dateTo = ref('')
 const sort = ref('record_date')
 const direction = ref<'asc' | 'desc'>('desc')
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(10)
 
 const form = reactive({
   amountMinor: 0,
@@ -66,10 +68,10 @@ const filteredRows = computed(() => {
     )
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)))
 const visibleRows = computed(() => {
-  const start = (page.value - 1) * pageSize
-  return filteredRows.value.slice(start, start + pageSize)
+  const start = (page.value - 1) * pageSize.value
+  return filteredRows.value.slice(start, start + pageSize.value)
 })
 const pages = computed(() =>
   Array.from(
@@ -77,6 +79,12 @@ const pages = computed(() =>
     (_, index) => Math.max(1, Math.min(totalPages.value - 4, page.value - 2)) + index,
   ),
 )
+
+watch([totalPages, filteredRows], () => {
+  if (page.value > totalPages.value) {
+    page.value = Math.max(1, totalPages.value)
+  }
+})
 
 function resetFilters() {
   search.value = ''
@@ -336,14 +344,30 @@ onMounted(load)
     </div>
 
     <footer class="pagination-bar">
-      <span>
-        Showing {{ filteredRows.length ? (page - 1) * pageSize + 1 : 0 }}–{{
-          Math.min(page * pageSize, filteredRows.length)
-        }}
-        of {{ filteredRows.length }}
-      </span>
-      <div>
-        <button type="button" :disabled="page === 1" @click="page--"><ChevronLeft :size="16" /></button>
+      <div class="pagination-info">
+        <span>
+          Showing {{ filteredRows.length ? (page - 1) * pageSize + 1 : 0 }}–{{
+            Math.min(page * pageSize, filteredRows.length)
+          }}
+          of {{ filteredRows.length }}
+        </span>
+        <label class="page-size-selector">
+          <span>Rows per page:</span>
+          <select v-model.number="pageSize" @change="page = 1">
+            <option :value="10">10</option>
+            <option :value="20">20</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+          </select>
+        </label>
+      </div>
+      <div class="pagination-controls">
+        <button type="button" :disabled="page <= 1" title="First page" aria-label="First page" @click="page = 1">
+          <ChevronsLeft :size="16" />
+        </button>
+        <button type="button" :disabled="page <= 1" title="Previous page" aria-label="Previous page" @click="page--">
+          <ChevronLeft :size="16" />
+        </button>
         <button
           v-for="item in pages"
           :key="item"
@@ -353,7 +377,24 @@ onMounted(load)
         >
           {{ item }}
         </button>
-        <button type="button" :disabled="page === totalPages" @click="page++"><ChevronRight :size="16" /></button>
+        <button
+          type="button"
+          :disabled="page >= totalPages"
+          title="Next page"
+          aria-label="Next page"
+          @click="page++"
+        >
+          <ChevronRight :size="16" />
+        </button>
+        <button
+          type="button"
+          :disabled="page >= totalPages"
+          title="Last page"
+          aria-label="Last page"
+          @click="page = totalPages"
+        >
+          <ChevronsRight :size="16" />
+        </button>
       </div>
     </footer>
 
@@ -816,9 +857,41 @@ onMounted(load)
   color: #73685D;
   font-size: 12px;
   background: #FBFCF4;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.pagination-bar div {
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-size-selector {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #73685D;
+}
+
+.page-size-selector select {
+  padding: 3px 24px 3px 8px;
+  font-size: 12px;
+  border: 1px solid #E5DEC9;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #26211D;
+  cursor: pointer;
+}
+
+.page-size-selector select:focus {
+  border-color: #43766C;
+  outline: none;
+}
+
+.pagination-controls {
   display: flex;
   gap: 5px;
 }
@@ -834,6 +907,14 @@ onMounted(load)
   place-items: center;
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination-bar button:hover:not(:disabled) {
+  background: #F8FAE5;
+  border-color: #43766C;
+  color: #43766C;
 }
 
 .pagination-bar button.active {
@@ -844,6 +925,7 @@ onMounted(load)
 
 .pagination-bar button:disabled {
   opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Modals */
