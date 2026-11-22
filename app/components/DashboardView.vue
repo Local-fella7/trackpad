@@ -20,6 +20,7 @@ import StatusProgress from './StatusProgress.vue'
 
 const props = defineProps<{
   dashboard: any
+  selectedMonth?: string
   money: (v: number) => string
   date: (v?: string) => string
 }>()
@@ -27,23 +28,52 @@ const props = defineProps<{
 const emit = defineEmits<{
   filter: [value: string]
   refresh: []
+  'month-change': [month: string]
 }>()
 
 const max = (rows: any[], key: string) => Math.max(...(rows || []).map(row => Number(row[key]) || 0), 1)
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
-const calendarCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+const parseMonthDate = (ym?: string) => {
+  if (ym && /^\d{4}-\d{2}$/.test(ym)) {
+    const [y, m] = ym.split('-').map(Number)
+    return new Date(y!, (m || 1) - 1, 1)
+  }
+  return new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+}
+const calendarCursor = ref(parseMonthDate(props.selectedMonth))
+
+watch(
+  () => props.selectedMonth,
+  next => {
+    if (!next || !/^\d{4}-\d{2}$/.test(next)) return
+    const currentYm = `${calendarCursor.value.getFullYear()}-${String(calendarCursor.value.getMonth() + 1).padStart(2, '0')}`
+    if (next !== currentYm) {
+      calendarCursor.value = parseMonthDate(next)
+    }
+  },
+)
 
 const calendarMonthLabel = computed(() =>
   calendarCursor.value.toLocaleDateString('en-TZ', { month: 'long', year: 'numeric' }),
 )
+const shortMonthLabel = computed(() =>
+  calendarCursor.value.toLocaleDateString('en-TZ', { month: 'short', year: 'numeric' }),
+)
+
+function emitCurrentMonth() {
+  const ym = `${calendarCursor.value.getFullYear()}-${String(calendarCursor.value.getMonth() + 1).padStart(2, '0')}`
+  emit('month-change', ym)
+}
 
 function shiftMonth(delta: number) {
   calendarCursor.value = new Date(calendarCursor.value.getFullYear(), calendarCursor.value.getMonth() + delta, 1)
+  emitCurrentMonth()
 }
 
 function goToday() {
   calendarCursor.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  emitCurrentMonth()
 }
 
 const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -158,35 +188,38 @@ const activityBars = computed(() => {
     <section class="metrics">
       <article class="kpi-card highlight-teal">
         <div class="kpi-top">
-          <span>MONTHLY VALUE</span>
+          <span>MONTHLY VALUE · {{ shortMonthLabel.toUpperCase() }}</span>
           <i class="kpi-icon teal"><TrendingUp :size="18" /></i>
         </div>
         <strong>{{ money(dashboard?.monthSummary?.[0]?.total || 0) }}</strong>
         <small :class="{ up: dashboard?.valueTrend >= 0, down: dashboard?.valueTrend < 0 }">
           {{
             dashboard?.valueTrend === null || dashboard?.valueTrend === undefined
-              ? 'Current month order value'
-              : `${dashboard.valueTrend >= 0 ? '↑' : '↓'} ${Math.abs(dashboard.valueTrend)}% vs last month`
+              ? `Order value for ${calendarMonthLabel}`
+              : `${dashboard.valueTrend >= 0 ? '↑' : '↓'} ${Math.abs(dashboard.valueTrend)}% vs previous month`
           }}
         </small>
       </article>
 
       <article class="kpi-card">
         <div class="kpi-top">
-          <span>PAID TOTAL</span>
+          <span>PAID TOTAL · {{ shortMonthLabel.toUpperCase() }}</span>
           <i class="kpi-icon teal"><CheckCircle2 :size="18" /></i>
         </div>
         <strong>{{ money(dashboard?.paidTotal || 0) }}</strong>
-        <small>Total payments collected</small>
+        <small>Payments collected for {{ calendarMonthLabel }}</small>
       </article>
 
       <article class="kpi-card highlight-rust" @click="emit('filter', 'unpaid')">
         <div class="kpi-top">
-          <span>OUTSTANDING BALANCE</span>
+          <span>OUTSTANDING · {{ shortMonthLabel.toUpperCase() }}</span>
           <i class="kpi-icon rust"><Wallet :size="18" /></i>
         </div>
         <strong class="rust-text">{{ money(dashboard?.outstandingTotal || 0) }}</strong>
-        <small>{{ dashboard?.unpaidCount || 0 }} order{{ dashboard?.unpaidCount === 1 ? '' : 's' }} awaiting payment</small>
+        <small>
+          {{ dashboard?.monthUnpaidCount ?? dashboard?.unpaidCount ?? 0 }}
+          order{{ (dashboard?.monthUnpaidCount ?? dashboard?.unpaidCount ?? 0) === 1 ? '' : 's' }} awaiting payment in {{ shortMonthLabel }}
+        </small>
       </article>
 
       <article class="kpi-card">
@@ -200,20 +233,20 @@ const activityBars = computed(() => {
 
       <article class="kpi-card" @click="emit('filter', '')">
         <div class="kpi-top">
-          <span>ACTIVE ORDERS</span>
+          <span>ORDERS IN {{ shortMonthLabel.toUpperCase() }}</span>
           <i class="kpi-icon teal"><Layers :size="18" /></i>
         </div>
-        <strong>{{ dashboard?.activeRecords || 0 }}</strong>
-        <small>Total orders in register</small>
+        <strong>{{ dashboard?.monthOrderCount ?? dashboard?.activeRecords ?? 0 }}</strong>
+        <small>{{ dashboard?.activeRecords || 0 }} total orders in register</small>
       </article>
 
       <article class="kpi-card">
         <div class="kpi-top">
-          <span>UPCOMING EVENTS</span>
+          <span>EVENTS IN {{ shortMonthLabel.toUpperCase() }}</span>
           <i class="kpi-icon tan"><CalendarClock :size="18" /></i>
         </div>
-        <strong>{{ dashboard?.upcomingEvents?.length || 0 }}</strong>
-        <small>Scheduled in next 30 days</small>
+        <strong>{{ dashboard?.monthEventCount ?? dashboard?.upcomingEvents?.length ?? 0 }}</strong>
+        <small>{{ dashboard?.upcomingEvents?.length || 0 }} upcoming in next 30 days</small>
       </article>
     </section>
 

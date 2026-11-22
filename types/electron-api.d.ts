@@ -16,7 +16,7 @@ declare global {
       statuses: { list: () => Promise<{ ok: boolean; data?: unknown[] }>; create: (input: unknown) => Promise<{ ok: boolean }> }
       settings: { get: () => Promise<{ ok: boolean; data?: Record<string, string> }>; set: (input: unknown) => Promise<{ ok: boolean }> }
       billing: { list: () => Promise<any>; payments: (recordId: number) => Promise<any>; add: (input: unknown) => Promise<any>; remove: (id: number) => Promise<any> }
-      dashboard: { data: (input?: { days?: number }) => Promise<{ ok: boolean; data?: Record<string, unknown> }> }
+      dashboard: { data: (input?: { days?: number; month?: string }) => Promise<{ ok: boolean; data?: Record<string, unknown> }> }
       reports: { data: (type: string, params?: unknown) => Promise<any>; exportExcel: (report: unknown) => Promise<any>; exportPdf: (report: unknown) => Promise<any>; print: (report: unknown) => Promise<any>; openFolder: (file: string) => Promise<any> }
       documents: {
         sequenceStatus: (sequenceGroup: 'proforma_invoice' | 'order_form' | 'delivery_note') => Promise<any>

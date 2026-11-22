@@ -1,10 +1,14 @@
 import type Database from 'better-sqlite3'
 import { syncCompletedOrders } from './db/repos/records'
 
-export function getDashboardData(db: Database.Database, today: string, activityDays = 30) {
+export function getDashboardData(db: Database.Database, today: string, activityDays = 30, requestedMonth?: string) {
   syncCompletedOrders(db)
-  const month = `${today.slice(0, 7)}-%`
-  const previousMonth = `${today.slice(0, 7)}-01`
+  const selectedMonth =
+    requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth : today.slice(0, 7)
+  const monthPattern = `${selectedMonth}-%`
+  const monthStart = `${selectedMonth}-01`
+  const effectiveDateExpr = "COALESCE(NULLIF(r.event_date, ''), r.record_date)"
+
   const recordsToday = (
     db.prepare('SELECT COUNT(*) AS count FROM records WHERE deleted_at IS NULL AND record_date = ?').get(today) as {
       count: number
@@ -13,18 +17,39 @@ export function getDashboardData(db: Database.Database, today: string, activityD
   const activeRecords = (db.prepare('SELECT COUNT(*) AS count FROM records WHERE deleted_at IS NULL').get() as {
     count: number
   }).count
+  const monthOrderCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM records r WHERE r.deleted_at IS NULL AND ${effectiveDateExpr} LIKE ?`,
+      )
+      .get(monthPattern) as { count: number }
+  ).count
+  const monthEventCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM records r JOIN statuses s ON s.id = r.status_id
+         WHERE r.deleted_at IS NULL AND LOWER(s.name) <> 'cancelled' AND ${effectiveDateExpr} LIKE ?`,
+      )
+      .get(monthPattern) as { count: number }
+  ).count
+
   const monthSummary = db
     .prepare(
-      `SELECT currency, COUNT(*) AS count, COALESCE(SUM(CASE WHEN s.exclude_from_totals = 0 THEN r.grand_total_minor ELSE 0 END), 0) AS total
-    FROM records r JOIN statuses s ON s.id = r.status_id WHERE r.deleted_at IS NULL AND r.record_date LIKE ? GROUP BY currency`,
+      `SELECT r.currency, COUNT(*) AS count, COALESCE(SUM(CASE WHEN s.exclude_from_totals = 0 THEN r.grand_total_minor ELSE 0 END), 0) AS total
+       FROM records r JOIN statuses s ON s.id = r.status_id
+       WHERE r.deleted_at IS NULL AND ${effectiveDateExpr} LIKE ?
+       GROUP BY r.currency`,
     )
-    .all(month)
+    .all(monthPattern)
   const previousMonthTotal = (
     db
       .prepare(
-        `SELECT COALESCE(SUM(CASE WHEN s.exclude_from_totals = 0 THEN r.grand_total_minor ELSE 0 END),0) AS total FROM records r JOIN statuses s ON s.id=r.status_id WHERE r.deleted_at IS NULL AND r.record_date >= date(?, '-1 month') AND r.record_date < ?`,
+        `SELECT COALESCE(SUM(CASE WHEN s.exclude_from_totals = 0 THEN r.grand_total_minor ELSE 0 END),0) AS total
+         FROM records r JOIN statuses s ON s.id=r.status_id
+         WHERE r.deleted_at IS NULL AND ${effectiveDateExpr} >= date(?, '-1 month') AND ${effectiveDateExpr} < ?`,
       )
-      .get(previousMonth, previousMonth) as { total: number }
+      .get(monthStart, monthStart) as { total: number }
   ).total
 
   const confirmedExpr =
@@ -52,20 +77,40 @@ export function getDashboardData(db: Database.Database, today: string, activityD
     (
       db
         .prepare(
-          `SELECT COALESCE(SUM(p.amount_minor),0) AS total FROM payments p JOIN records r ON r.id=p.record_id WHERE r.deleted_at IS NULL`,
+          `SELECT COALESCE(SUM(p.amount_minor),0) AS total
+           FROM payments p
+           JOIN records r ON r.id = p.record_id
+           WHERE r.deleted_at IS NULL AND ${effectiveDateExpr} LIKE ?`,
         )
-        .get() as { total: number }
+        .get(monthPattern) as { total: number }
     ).total,
   )
   const outstandingTotal = Number(
     (
       db
         .prepare(
-          `SELECT COALESCE(SUM(r.grand_total_minor-COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)),0) AS total FROM records r JOIN statuses s ON s.id=r.status_id WHERE r.deleted_at IS NULL AND LOWER(s.name)<> 'cancelled' AND r.grand_total_minor>COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)`,
+          `SELECT COALESCE(SUM(r.grand_total_minor-COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)),0) AS total
+           FROM records r JOIN statuses s ON s.id=r.status_id
+           WHERE r.deleted_at IS NULL
+             AND LOWER(s.name) <> 'cancelled'
+             AND ${effectiveDateExpr} LIKE ?
+             AND r.grand_total_minor > COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)`,
         )
-        .get() as { total: number }
+        .get(monthPattern) as { total: number }
     ).total,
   )
+  const monthUnpaidCount = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM records r JOIN statuses s ON s.id=r.status_id
+         WHERE r.deleted_at IS NULL
+           AND LOWER(s.name) <> 'cancelled'
+           AND ${effectiveDateExpr} LIKE ?
+           AND r.grand_total_minor > COALESCE((SELECT SUM(p.amount_minor) FROM payments p WHERE p.record_id=r.id),0)`,
+      )
+      .get(monthPattern) as { count: number }
+  ).count
   const upcomingEvents = db
     .prepare(
       `SELECT r.id, r.event_date, r.client_name, r.location, r.contacts, r.grand_total_minor, r.currency, s.name AS status_name, CASE WHEN ${confirmedExpr} THEN 1 ELSE 0 END AS is_confirmed FROM records r JOIN statuses s ON s.id=r.status_id WHERE r.deleted_at IS NULL AND LOWER(s.name) <> 'cancelled' AND r.event_date BETWEEN ? AND date(?, '+30 days') ORDER BY r.event_date`,
@@ -125,8 +170,12 @@ export function getDashboardData(db: Database.Database, today: string, activityD
     .all()
   const currentTotal = Number((monthSummary[0] as { total?: number } | undefined)?.total ?? 0)
   return {
+    selectedMonth,
     recordsToday,
     activeRecords,
+    monthOrderCount,
+    monthEventCount,
+    monthUnpaidCount,
     monthSummary,
     previousMonthTotal,
     paidTotal,

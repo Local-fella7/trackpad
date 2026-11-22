@@ -184,8 +184,8 @@ function buildProformaOrInvoiceBody(doc: DocumentRecord): string {
     ${doc.notes ? `<div class="doc-notes"><strong>Remarks:</strong> ${escapeHtml(doc.notes)}</div>` : ''}
 
     <div class="payment-terms">
-      <p>50% of the total amount should be paid for you to secure the booking and as an advance.</p>
-      <p>And the remaining 50% should be paid one week before delivery day.</p>
+      <p><strong>50% of the total amount should be paid for you to secure the booking and as an advance.</strong></p>
+      <p><strong>And the remaining 50% should be paid one week before delivery day.</strong></p>
     </div>
 
     <table class="payment-grid">
@@ -535,8 +535,8 @@ export function buildDocumentHtml(doc: DocumentRecord, assets: DocumentBrandingA
     .payment-terms {
       margin: 6px 0 14px;
       font-size: 11.5px;
-      font-weight: 600;
-      color: #1f1f1f;
+      font-weight: 800;
+      color: #111111;
     }
     .payment-terms p {
       margin: 2px 0;

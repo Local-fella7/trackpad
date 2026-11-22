@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import {
-  ClipboardList,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   FilePlus2,
   Hash,
   Search,
   Settings2,
-  Truck,
   X,
 } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
@@ -14,16 +16,19 @@ import { formatDate } from '../../shared/date'
 import type { DocumentRecord, PendingOrderRow, SequenceGroup, SequenceStatus } from '../../shared/document-types'
 import DocumentPreviewModal from './DocumentPreviewModal.vue'
 
+const props = defineProps<{
+  kind: 'order_form' | 'delivery_note'
+}>()
+
 const emit = defineEmits<{ refresh: [] }>()
 
-const activeFormKind = ref<'order_form' | 'delivery_note'>('order_form')
 const subTab = ref<'pending' | 'issued'>('pending')
 const search = ref('')
 const loading = ref(false)
 const busy = ref(false)
 
 const sequence = ref<SequenceStatus>({
-  sequenceGroup: 'order_form',
+  sequenceGroup: props.kind,
   configured: false,
   startNumber: null,
   nextNumber: null,
@@ -34,9 +39,45 @@ const pendingOrders = ref<PendingOrderRow[]>([])
 const issuedDocs = ref<DocumentRecord[]>([])
 const previewDoc = ref<DocumentRecord | null>(null)
 
+// Pagination
+const pageSize = ref(10)
+const pendingPage = ref(1)
+const issuedPage = ref(1)
+
+const pendingTotalPages = computed(() => Math.max(1, Math.ceil(pendingOrders.value.length / pageSize.value)))
+const visiblePendingOrders = computed(() => {
+  const start = (pendingPage.value - 1) * pageSize.value
+  return pendingOrders.value.slice(start, start + pageSize.value)
+})
+const pendingPageNumbers = computed(() =>
+  Array.from(
+    { length: Math.min(pendingTotalPages.value, 5) },
+    (_, i) => Math.max(1, Math.min(pendingTotalPages.value - 4, pendingPage.value - 2)) + i,
+  ),
+)
+
+const issuedTotalPages = computed(() => Math.max(1, Math.ceil(issuedDocs.value.length / pageSize.value)))
+const visibleIssuedDocs = computed(() => {
+  const start = (issuedPage.value - 1) * pageSize.value
+  return issuedDocs.value.slice(start, start + pageSize.value)
+})
+const issuedPageNumbers = computed(() =>
+  Array.from(
+    { length: Math.min(issuedTotalPages.value, 5) },
+    (_, i) => Math.max(1, Math.min(issuedTotalPages.value - 4, issuedPage.value - 2)) + i,
+  ),
+)
+
+watch([pendingTotalPages, pageSize], () => {
+  if (pendingPage.value > pendingTotalPages.value) pendingPage.value = pendingTotalPages.value
+})
+watch([issuedTotalPages, pageSize], () => {
+  if (issuedPage.value > issuedTotalPages.value) issuedPage.value = issuedTotalPages.value
+})
+
 // Start-number modal
 const sequenceModal = ref(false)
-const sequenceInput = ref('0498')
+const sequenceInput = ref(props.kind === 'order_form' ? '0498' : '0783')
 const pendingActionAfterSequence = ref<(() => Promise<void>) | null>(null)
 
 // Generate Form modal
@@ -56,16 +97,17 @@ const money = (n: unknown) =>
   `${new Intl.NumberFormat('en-TZ', { maximumFractionDigits: 0 }).format(Number(n) || 0)} TZS`
 const date = (v?: string | null) => formatDate(v, '—')
 
-const currentSeqGroup = computed<SequenceGroup>(() => activeFormKind.value)
-const defaultStartSuggestion = computed(() => (activeFormKind.value === 'order_form' ? '0498' : '0783'))
-const kindLabel = computed(() => (activeFormKind.value === 'order_form' ? 'Customer Order Form' : 'Delivery Note'))
+const currentSeqGroup = computed<SequenceGroup>(() => props.kind)
+const defaultStartSuggestion = computed(() => (props.kind === 'order_form' ? '0498' : '0783'))
+const kindLabel = computed(() => (props.kind === 'order_form' ? 'Customer Order Form' : 'Delivery Note'))
+const pluralLabel = computed(() => (props.kind === 'order_form' ? 'Order Forms' : 'Delivery Notes'))
 
 async function loadAll() {
   loading.value = true
   try {
     const [seqRes, pendingRes, issuedRes] = await Promise.all([
       window.api!.documents.sequenceStatus(currentSeqGroup.value),
-      window.api!.documents.pendingOrders({ docKind: activeFormKind.value, search: search.value }),
+      window.api!.documents.pendingOrders({ docKind: props.kind, search: search.value }),
       window.api!.documents.list({ sequenceGroup: currentSeqGroup.value, search: search.value }),
     ])
     if (seqRes.ok) sequence.value = seqRes.data
@@ -76,9 +118,20 @@ async function loadAll() {
   }
 }
 
-watch([activeFormKind, search], () => {
+watch(search, () => {
+  pendingPage.value = 1
+  issuedPage.value = 1
   void loadAll()
 })
+
+watch(
+  () => props.kind,
+  () => {
+    pendingPage.value = 1
+    issuedPage.value = 1
+    void loadAll()
+  },
+)
 
 function openSequenceModal(afterSave?: () => Promise<void>) {
   sequenceInput.value = sequence.value.nextFormatted || defaultStartSuggestion.value
@@ -148,7 +201,7 @@ async function submitGenerateForm() {
   busy.value = true
   try {
     const res =
-      activeFormKind.value === 'order_form'
+      props.kind === 'order_form'
         ? await window.api!.documents.createOrderForm({
             recordId: selectedOrder.value.id,
             issueDate: formDetails.issueDate,
@@ -191,44 +244,15 @@ onMounted(loadAll)
 
 <template>
   <section class="doc-page">
-    <!-- Top Switcher: Order Form vs Delivery Note -->
-    <div class="kind-switcher">
-      <button
-        type="button"
-        class="kind-card"
-        :class="{ active: activeFormKind === 'order_form' }"
-        @click="activeFormKind = 'order_form'"
-      >
-        <ClipboardList :size="20" />
-        <div>
-          <strong>Customer Order Forms</strong>
-          <small>Event setup/takedown dates, colors, 20% deposit &amp; customer sign-off</small>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        class="kind-card"
-        :class="{ active: activeFormKind === 'delivery_note' }"
-        @click="activeFormKind = 'delivery_note'"
-      >
-        <Truck :size="20" />
-        <div>
-          <strong>Delivery Notes</strong>
-          <small>Goods dispatch checklist with bilingual Delivered / Received sign-off</small>
-        </div>
-      </button>
-    </div>
-
     <!-- Toolbar -->
     <div class="toolbar-card">
       <div class="tabs">
         <button type="button" :class="{ active: subTab === 'pending' }" @click="subTab = 'pending'">
-          <span>Pending Orders</span>
+          <span>Orders Without {{ kind === 'order_form' ? 'Order Form' : 'Delivery Note' }}</span>
           <em class="count-pill">{{ pendingOrders.length }}</em>
         </button>
         <button type="button" :class="{ active: subTab === 'issued' }" @click="subTab = 'issued'">
-          <span>Issued {{ activeFormKind === 'order_form' ? 'Order Forms' : 'Delivery Notes' }}</span>
+          <span>Issued {{ pluralLabel }}</span>
           <em class="count-pill neutral">{{ issuedDocs.length }}</em>
         </button>
       </div>
@@ -256,12 +280,12 @@ onMounted(loadAll)
     <div v-if="subTab === 'pending'" class="table-card">
       <div class="table-head-info">
         <h3>Orders Without a {{ kindLabel }}</h3>
-        <p>Select an order to fill in {{ activeFormKind === 'order_form' ? 'event schedule & color details' : 'dispatch date' }} and generate the printable {{ kindLabel }}.</p>
+        <p>Select an order to fill in {{ kind === 'order_form' ? 'event schedule & color details' : 'dispatch date' }} and generate the printable {{ kindLabel }}.</p>
       </div>
 
       <div v-if="!pendingOrders.length" class="empty-state">
         <strong>{{ loading ? 'Loading orders…' : `All active orders already have a ${kindLabel}.` }}</strong>
-        <span>You can view or reprint existing forms in the "Issued" tab.</span>
+        <span>You can view or reprint existing forms in the "Issued {{ pluralLabel }}" tab.</span>
       </div>
 
       <div v-else class="table-wrap">
@@ -278,7 +302,7 @@ onMounted(loadAll)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="order in pendingOrders" :key="order.id">
+            <tr v-for="order in visiblePendingOrders" :key="order.id">
               <td>
                 <strong>{{ order.record_number || `#${order.id}` }}</strong>
                 <small class="sub">{{ date(order.record_date) }}</small>
@@ -294,25 +318,54 @@ onMounted(loadAll)
               <td class="actions-col">
                 <button type="button" class="btn-primary sm" :disabled="busy" @click="openGenerateModal(order)">
                   <FilePlus2 :size="14" />
-                  <span>Generate {{ activeFormKind === 'order_form' ? 'Order Form' : 'Delivery Note' }}</span>
+                  <span>Generate {{ kind === 'order_form' ? 'Order Form' : 'Delivery Note' }}</span>
                 </button>
               </td>
             </tr>
           </tbody>
         </table>
+
+        <footer class="pager">
+          <span class="pager-info">
+            Showing {{ (pendingPage - 1) * pageSize + 1 }}–{{ Math.min(pendingPage * pageSize, pendingOrders.length) }} of {{ pendingOrders.length }}
+          </span>
+          <div class="pager-controls">
+            <label class="page-size">
+              <span>Rows</span>
+              <select v-model.number="pageSize">
+                <option :value="10">10</option>
+                <option :value="25">25</option>
+                <option :value="50">50</option>
+              </select>
+            </label>
+            <button type="button" :disabled="pendingPage <= 1" @click="pendingPage = 1"><ChevronsLeft :size="14" /></button>
+            <button type="button" :disabled="pendingPage <= 1" @click="pendingPage -= 1"><ChevronLeft :size="14" /></button>
+            <button
+              v-for="p in pendingPageNumbers"
+              :key="p"
+              type="button"
+              :class="{ active: p === pendingPage }"
+              @click="pendingPage = p"
+            >
+              {{ p }}
+            </button>
+            <button type="button" :disabled="pendingPage >= pendingTotalPages" @click="pendingPage += 1"><ChevronRight :size="14" /></button>
+            <button type="button" :disabled="pendingPage >= pendingTotalPages" @click="pendingPage = pendingTotalPages"><ChevronsRight :size="14" /></button>
+          </div>
+        </footer>
       </div>
     </div>
 
     <!-- Issued Forms -->
     <div v-else class="table-card">
       <div class="table-head-info">
-        <h3>Issued {{ activeFormKind === 'order_form' ? 'Customer Order Forms' : 'Delivery Notes' }}</h3>
+        <h3>Issued {{ kind === 'order_form' ? 'Customer Order Forms' : 'Delivery Notes' }}</h3>
         <p>Preview, print, or export any issued form as an A4 PDF with official M&amp;S Decorations branding.</p>
       </div>
 
       <div v-if="!issuedDocs.length" class="empty-state">
-        <strong>{{ loading ? 'Loading forms…' : `No ${kindLabel}s generated yet.` }}</strong>
-        <span>Switch to "Pending Orders" to create one.</span>
+        <strong>{{ loading ? 'Loading forms…' : `No ${pluralLabel} generated yet.` }}</strong>
+        <span>Switch to the pending tab to create one.</span>
       </div>
 
       <div v-else class="table-wrap">
@@ -328,7 +381,7 @@ onMounted(loadAll)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="doc in issuedDocs" :key="doc.id">
+            <tr v-for="doc in visibleIssuedDocs" :key="doc.id">
               <td><strong class="doc-no">{{ doc.doc_number }}</strong></td>
               <td>
                 <strong>{{ doc.client_name }}</strong>
@@ -353,6 +406,35 @@ onMounted(loadAll)
             </tr>
           </tbody>
         </table>
+
+        <footer class="pager">
+          <span class="pager-info">
+            Showing {{ (issuedPage - 1) * pageSize + 1 }}–{{ Math.min(issuedPage * pageSize, issuedDocs.length) }} of {{ issuedDocs.length }}
+          </span>
+          <div class="pager-controls">
+            <label class="page-size">
+              <span>Rows</span>
+              <select v-model.number="pageSize">
+                <option :value="10">10</option>
+                <option :value="25">25</option>
+                <option :value="50">50</option>
+              </select>
+            </label>
+            <button type="button" :disabled="issuedPage <= 1" @click="issuedPage = 1"><ChevronsLeft :size="14" /></button>
+            <button type="button" :disabled="issuedPage <= 1" @click="issuedPage -= 1"><ChevronLeft :size="14" /></button>
+            <button
+              v-for="p in issuedPageNumbers"
+              :key="p"
+              type="button"
+              :class="{ active: p === issuedPage }"
+              @click="issuedPage = p"
+            >
+              {{ p }}
+            </button>
+            <button type="button" :disabled="issuedPage >= issuedTotalPages" @click="issuedPage += 1"><ChevronRight :size="14" /></button>
+            <button type="button" :disabled="issuedPage >= issuedTotalPages" @click="issuedPage = issuedTotalPages"><ChevronsRight :size="14" /></button>
+          </div>
+        </footer>
       </div>
     </div>
 
@@ -369,7 +451,7 @@ onMounted(loadAll)
 
         <div class="dialog-body">
           <p class="hint">
-            Enter the starting number (for example <strong>{{ defaultStartSuggestion }}</strong>). Future {{ kindLabel }}s
+            Enter the starting number (for example <strong>{{ defaultStartSuggestion }}</strong>). Future {{ pluralLabel }}
             will increment automatically and skip any already-issued numbers without overwriting them.
           </p>
           <label class="field">
@@ -403,13 +485,13 @@ onMounted(loadAll)
               <input v-model="formDetails.issueDate" type="date" />
             </label>
 
-            <label v-if="activeFormKind === 'order_form'" class="field">
+            <label v-if="kind === 'order_form'" class="field">
               <span>Alternate Phone No.</span>
               <input v-model="formDetails.altPhone" placeholder="Optional second phone" />
             </label>
           </div>
 
-          <div v-if="activeFormKind === 'order_form'" class="grid-2" style="margin-top: 10px">
+          <div v-if="kind === 'order_form'" class="grid-2" style="margin-top: 10px">
             <label class="field">
               <span>Preferred Set-up Date</span>
               <input v-model="formDetails.setupDate" type="date" />
@@ -420,7 +502,7 @@ onMounted(loadAll)
             </label>
           </div>
 
-          <label v-if="activeFormKind === 'order_form'" class="field" style="margin-top: 10px">
+          <label v-if="kind === 'order_form'" class="field" style="margin-top: 10px">
             <span>Colors of the Event</span>
             <input v-model="formDetails.eventColors" placeholder="e.g. Gold, White & Emerald" />
           </label>
@@ -457,50 +539,6 @@ onMounted(loadAll)
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.kind-switcher {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.kind-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  text-align: left;
-  padding: 14px 18px;
-  border-radius: 14px;
-  border: 1.5px solid #e5dec9;
-  background: #ffffff;
-  color: #26211D;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-
-.kind-card strong {
-  display: block;
-  font-size: 14.5px;
-  font-weight: 800;
-}
-
-.kind-card small {
-  display: block;
-  font-size: 12px;
-  color: #73685D;
-  margin-top: 2px;
-}
-
-.kind-card.active {
-  background: #43766C;
-  border-color: #43766C;
-  color: #F8FAE5;
-  box-shadow: 0 8px 20px rgba(67, 118, 108, 0.2);
-}
-
-.kind-card.active small {
-  color: rgba(248, 250, 229, 0.8);
 }
 
 .toolbar-card {
@@ -758,6 +796,75 @@ tbody tr:hover td {
 
 .btn-outline:hover:not(:disabled) {
   background: #F8FAE5;
+}
+
+/* Pagination */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid #e5dec9;
+  background: #fbfcf2;
+}
+
+.pager-info {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #73685D;
+}
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #73685D;
+  margin-right: 6px;
+}
+
+.page-size select {
+  border: 1px solid #d7cfb8;
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: #ffffff;
+  font-size: 12px;
+  color: #26211D;
+}
+
+.pager-controls button {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid #d7cfb8;
+  background: #ffffff;
+  color: #26211D;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.pager-controls button.active {
+  background: #43766C;
+  border-color: #43766C;
+  color: #F8FAE5;
+}
+
+.pager-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Modals */

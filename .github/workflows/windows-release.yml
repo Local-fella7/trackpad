@@ -7,6 +7,7 @@ on:
       - 'v*'
     branches:
       - 'phase/**'
+      - 'feature/**'
 
 permissions:
   contents: read

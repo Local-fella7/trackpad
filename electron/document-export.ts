@@ -5,7 +5,15 @@ import path from 'node:path'
 import { buildDocumentHtml, type DocumentBrandingAssets } from '../shared/document-templates'
 import type { DocumentRecord } from '../shared/document-types'
 
-const documentsDirectory = () => path.join(app.getPath('documents'), 'Trackpad', 'Documents')
+const documentDirectoryFor = (docType: DocumentRecord['doc_type']) => {
+  const folder =
+    docType === 'order_form'
+      ? 'Order Forms'
+      : docType === 'delivery_note'
+        ? 'Deliveries'
+        : 'Proformas'
+  return path.join(app.getPath('documents'), 'Trackpad', folder)
+}
 
 let cachedAssets: DocumentBrandingAssets | null = null
 
@@ -72,7 +80,7 @@ async function createDocWindow(parent: MainWindow, title: string, html: string) 
 }
 
 export async function exportDocumentPdf(parent: MainWindow, doc: DocumentRecord) {
-  const directory = documentsDirectory()
+  const directory = documentDirectoryFor(doc.doc_type)
   try {
     await mkdir(directory, { recursive: true })
   } catch (error) {

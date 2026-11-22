@@ -26,6 +26,7 @@ const recordTotalPages = ref(1)
 const rows = ref<Row[]>([])
 const statuses = ref<any[]>([])
 const dashboard = ref<any>(null)
+const dashboardMonth = ref(new Date().toISOString().slice(0, 7))
 
 const modal = ref(false)
 const viewModal = ref(false)
@@ -102,11 +103,18 @@ const pageMeta = computed(() => {
       subtitle: 'Generate numbered M&S Decorations Proforma Invoices and raise amended Invoices.',
     }
   }
-  if (page.value === 'forms') {
+  if (page.value === 'order-forms') {
     return {
-      eyebrow: 'DISPATCH & CONFIRMATION',
-      title: 'Order & Delivery Forms',
-      subtitle: 'Generate branded Customer Order Forms and Delivery Notes with automatic numbering.',
+      eyebrow: 'ORDER CONFIRMATION',
+      title: 'Customer Order Forms',
+      subtitle: 'Generate branded M&S Decorations Customer Order Forms with automatic numbering.',
+    }
+  }
+  if (page.value === 'deliveries') {
+    return {
+      eyebrow: 'DISPATCH & HANDOVER',
+      title: 'Delivery Notes',
+      subtitle: 'Generate branded M&S Decorations Delivery Notes with bilingual handover sign-off.',
     }
   }
   if (page.value === 'billing') {
@@ -192,7 +200,7 @@ async function load() {
         recordTotalPages.value = r.data.totalPages
         recordPage.value = r.data.page
       }),
-    window.api!.dashboard.data().then((r: any) => {
+    window.api!.dashboard.data({ month: dashboardMonth.value }).then((r: any) => {
       if (!r.ok) throw new Error(r.error.message)
       dashboard.value = r.data
     }),
@@ -562,6 +570,12 @@ async function openReportFolder() {
   if (!r.ok) fail(r.error.message)
 }
 
+async function handleDashboardMonthChange(month: string) {
+  dashboardMonth.value = month
+  const r: any = await window.api!.dashboard.data({ month })
+  if (r.ok) dashboard.value = r.data
+}
+
 function handleNavigate(target: Page) {
   page.value = target
   if (target === 'reports' && !report.value) {
@@ -632,10 +646,12 @@ onMounted(boot)
       <DashboardView
         v-if="page === 'dashboard'"
         :dashboard="dashboard"
+        :selected-month="dashboardMonth"
         :money="money"
         :date="date"
         @filter="openFiltered"
         @refresh="load"
+        @month-change="handleDashboardMonthChange"
       />
       <RecordsView
         v-else-if="page === 'orders'"
@@ -657,7 +673,8 @@ onMounted(boot)
         @remove="removeOrder"
       />
       <ProformaInvoicesView v-else-if="page === 'proformas'" @refresh="load" />
-      <OrderDeliveryFormsView v-else-if="page === 'forms'" @refresh="load" />
+      <OrderDeliveryFormsView v-else-if="page === 'order-forms'" key="order-forms" kind="order_form" @refresh="load" />
+      <OrderDeliveryFormsView v-else-if="page === 'deliveries'" key="deliveries" kind="delivery_note" @refresh="load" />
       <BillingView v-else-if="page === 'billing'" @refresh="load" />
       <ReportsView
         v-else

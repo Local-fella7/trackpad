@@ -13,6 +13,8 @@ import {
   setSequenceStart,
 } from '../electron/db/repos/documents'
 import { getRecord, saveRecord } from '../electron/db/repos/records'
+import { addPayment } from '../electron/db/repos/payments'
+import { getDashboardData } from '../electron/dashboard'
 import { buildDocumentHtml } from '../shared/document-templates'
 
 function createTestDb() {
@@ -186,6 +188,58 @@ describe('Documents repository & safe auto-numbering', () => {
     expect(deliveryHtml).toContain('Received by / Imepokelewa:')
     expect(deliveryHtml).toContain('/branding/ms-header.png')
     expect(deliveryHtml).toContain('/branding/ms-footer.png')
+
+    db.close()
+  })
+
+  it('scopes overview KPI totals to the selected month when switching months', () => {
+    const db = createTestDb()
+    const pendingStatus = db.prepare("SELECT id FROM statuses WHERE LOWER(name) = 'pending'").get() as { id: number }
+
+    const novOrder = saveRecord(
+      db,
+      null,
+      {
+        recordDate: '2026-11-10',
+        recordNumber: 'ORD-0001',
+        clientName: 'November Client',
+        eventDate: '2026-11-22',
+        statusId: pendingStatus.id,
+        currency: 'TZS',
+      },
+      [{ description: 'Tents', quantity: 4, unitPrice: 100000 }],
+      null,
+    )
+    addPayment(db, { recordId: novOrder, amountMinor: 150000, paymentDate: '2026-11-11', method: 'CRDB' })
+
+    const decOrder = saveRecord(
+      db,
+      null,
+      {
+        recordDate: '2026-11-15',
+        recordNumber: 'ORD-0002',
+        clientName: 'December Client',
+        eventDate: '2026-12-18',
+        statusId: pendingStatus.id,
+        currency: 'TZS',
+      },
+      [{ description: 'Decor Package', quantity: 1, unitPrice: 1000000 }],
+      null,
+    )
+    addPayment(db, { recordId: decOrder, amountMinor: 500000, paymentDate: '2026-11-16', method: 'NMB' })
+
+    const novData = getDashboardData(db, '2026-11-23', 30, '2026-11')
+    expect((novData.monthSummary[0] as any).total).toBe(400000)
+    expect(novData.paidTotal).toBe(150000)
+    expect(novData.outstandingTotal).toBe(250000)
+    expect(novData.monthOrderCount).toBe(1)
+
+    const decData = getDashboardData(db, '2026-11-23', 30, '2026-12')
+    expect((decData.monthSummary[0] as any).total).toBe(1000000)
+    expect(decData.paidTotal).toBe(500000)
+    expect(decData.outstandingTotal).toBe(500000)
+    expect(decData.monthOrderCount).toBe(1)
+    expect(decData.previousMonthTotal).toBe(400000)
 
     db.close()
   })

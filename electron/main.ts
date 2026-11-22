@@ -225,8 +225,10 @@ app.whenReady().then(() => {
   }))
   ipcMain.handle('dashboard:data', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()
-    const days = typeof (input as { days?: unknown })?.days === 'number' ? (input as { days: number }).days : 30
-    return getDashboardData(database!, new Date().toISOString().slice(0, 10), days)
+    const payload = input as { days?: unknown; month?: unknown } | null
+    const days = typeof payload?.days === 'number' ? payload.days : 30
+    const month = typeof payload?.month === 'string' ? payload.month : undefined
+    return getDashboardData(database!, new Date().toISOString().slice(0, 10), days, month)
   }))
   ipcMain.handle('reports:data', (_event, input: unknown) => toIpcResult(() => {
     requireSessionUser()
