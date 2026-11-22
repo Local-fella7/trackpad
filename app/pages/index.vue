@@ -5,6 +5,8 @@ import { formatDate } from '../../shared/date'
 import { cloneIpcPayload, cloneRecordItems } from '../../shared/record-payload'
 import AppSidebar, { type Page } from '../components/AppSidebar.vue'
 import BillingView from '../components/BillingView.vue'
+import OrderDeliveryFormsView from '../components/OrderDeliveryFormsView.vue'
+import ProformaInvoicesView from '../components/ProformaInvoicesView.vue'
 
 type Row = Record<string, any>
 
@@ -91,6 +93,20 @@ const pageMeta = computed(() => {
       eyebrow: 'ORDER MANAGEMENT',
       title: 'Orders Register',
       subtitle: 'Create, view, print item lists, edit, or delete client orders.',
+    }
+  }
+  if (page.value === 'proformas') {
+    return {
+      eyebrow: 'PROFORMA & INVOICING',
+      title: 'Proforma Invoices',
+      subtitle: 'Generate numbered M&S Decorations Proforma Invoices and raise amended Invoices.',
+    }
+  }
+  if (page.value === 'forms') {
+    return {
+      eyebrow: 'DISPATCH & CONFIRMATION',
+      title: 'Order & Delivery Forms',
+      subtitle: 'Generate branded Customer Order Forms and Delivery Notes with automatic numbering.',
     }
   }
   if (page.value === 'billing') {
@@ -640,6 +656,8 @@ onMounted(boot)
         @edit="edit"
         @remove="removeOrder"
       />
+      <ProformaInvoicesView v-else-if="page === 'proformas'" @refresh="load" />
+      <OrderDeliveryFormsView v-else-if="page === 'forms'" @refresh="load" />
       <BillingView v-else-if="page === 'billing'" @refresh="load" />
       <ReportsView
         v-else

@@ -53,5 +53,18 @@ contextBridge.exposeInMainWorld('api', {
   },
   dashboard: { data: (input?: unknown) => ipcRenderer.invoke('dashboard:data', input) },
   reports: { data: (type: string, params?: unknown) => ipcRenderer.invoke('reports:data', { type, params }), exportExcel: (report: unknown) => ipcRenderer.invoke('reports:exportExcel', serializeReport(report)), exportPdf: (report: unknown) => ipcRenderer.invoke('reports:exportPdf', serializeReport(report)), print: (report: unknown) => ipcRenderer.invoke('reports:print', serializeReport(report)), openFolder: (file: string) => ipcRenderer.invoke('reports:openFolder', file) },
+  documents: {
+    sequenceStatus: (sequenceGroup: string) => ipcRenderer.invoke('documents:sequenceStatus', sequenceGroup),
+    setSequenceStart: (input: unknown) => ipcRenderer.invoke('documents:setSequenceStart', input),
+    pendingOrders: (input: unknown) => ipcRenderer.invoke('documents:pendingOrders', input),
+    list: (input?: unknown) => ipcRenderer.invoke('documents:list', input),
+    get: (id: number) => ipcRenderer.invoke('documents:get', id),
+    createProforma: (input: unknown) => ipcRenderer.invoke('documents:createProforma', input),
+    amendProforma: (input: unknown) => ipcRenderer.invoke('documents:amendProforma', serializeReport(input)),
+    createOrderForm: (input: unknown) => ipcRenderer.invoke('documents:createOrderForm', input),
+    createDeliveryNote: (input: unknown) => ipcRenderer.invoke('documents:createDeliveryNote', input),
+    exportPdf: (id: number) => ipcRenderer.invoke('documents:exportPdf', id),
+    print: (id: number) => ipcRenderer.invoke('documents:print', id),
+  },
   backup: { now: () => ipcRenderer.invoke('backup:now'), list: () => ipcRenderer.invoke('backup:list'), health: () => ipcRenderer.invoke('backup:health'), restore: (file: string) => ipcRenderer.invoke('backup:restore', file) },
 })

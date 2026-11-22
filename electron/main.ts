@@ -17,6 +17,26 @@ import { getSettings, setSetting } from './db/repos/settings'
 import { getDashboardData } from './dashboard'
 import { getReportData, reportTypes, type ReportType, type ReportParams } from './reports'
 import { exportExcel, exportPdf, printOrderItems, printReport, revealReport } from './report-export'
+import {
+  amendProformaToInvoice,
+  createDeliveryNoteFromOrder,
+  createOrderFormFromOrder,
+  createProformaFromOrder,
+  getDocument,
+  getSequenceStatus,
+  listDocuments,
+  listOrdersWithoutDocument,
+  setSequenceStart,
+} from './db/repos/documents'
+import { exportDocumentPdf, printDocument } from './document-export'
+import type {
+  AmendProformaInput,
+  CreateDeliveryNoteInput,
+  CreateOrderFormInput,
+  CreateProformaInput,
+  DocumentType,
+  SequenceGroup,
+} from '../shared/document-types'
 import { applyRetention, backupHealth, copyBackupToDirectory, createBackup, listBackups, validateBackup } from './backup'
 import { copyFileSync, existsSync } from 'node:fs'
 import { addPayment, deletePayment, listBilling, listPayments } from './db/repos/payments'
@@ -219,6 +239,71 @@ app.whenReady().then(() => {
   ipcMain.handle('reports:exportPdf', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return exportPdf(mainWindow, report as { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   ipcMain.handle('reports:print', (_event, report: unknown) => toIpcResult(() => { requireSessionUser(); if (!mainWindow || !report || typeof report !== 'object') throw new Error('INVALID_INPUT'); return printReport(mainWindow, report as { title?: string; period: string; rows: Record<string, unknown>[]; summary: Record<string, unknown>[] }) }))
   ipcMain.handle('reports:openFolder', (_event, file: unknown) => toIpcResult(() => { requireSessionUser(); if (typeof file !== 'string') throw new Error('INVALID_INPUT'); return revealReport(file) }))
+  ipcMain.handle('documents:sequenceStatus', (_event, sequenceGroup: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    return getSequenceStatus(database!, sequenceGroup as SequenceGroup)
+  }))
+  ipcMain.handle('documents:setSequenceStart', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser()
+    const value = input as { sequenceGroup?: SequenceGroup; startNumber?: number } | null
+    if (!value?.sequenceGroup || value.startNumber === undefined) throw new Error('INVALID_INPUT')
+    return setSequenceStart(database!, value.sequenceGroup, value.startNumber, user.id)
+  }))
+  ipcMain.handle('documents:pendingOrders', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    const value = input as { docKind?: 'proforma' | 'order_form' | 'delivery_note'; search?: string } | null
+    if (!value?.docKind || !['proforma', 'order_form', 'delivery_note'].includes(value.docKind)) {
+      throw new Error('INVALID_INPUT')
+    }
+    return listOrdersWithoutDocument(database!, value.docKind, typeof value.search === 'string' ? value.search : '')
+  }))
+  ipcMain.handle('documents:list', (_event, input: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    const value = (input ?? {}) as { sequenceGroup?: SequenceGroup; docTypes?: DocumentType[]; search?: string }
+    return listDocuments(database!, value)
+  }))
+  ipcMain.handle('documents:get', (_event, id: unknown) => toIpcResult(() => {
+    requireSessionUser()
+    return getDocument(database!, Number(id))
+  }))
+  ipcMain.handle('documents:createProforma', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser()
+    const value = input as CreateProformaInput | null
+    if (!value || !Number.isInteger(Number(value.recordId))) throw new Error('INVALID_INPUT')
+    return createProformaFromOrder(database!, { ...value, recordId: Number(value.recordId) }, user.id)
+  }))
+  ipcMain.handle('documents:amendProforma', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser()
+    const value = input as AmendProformaInput | null
+    if (!value || !Number.isInteger(Number(value.sourceDocumentId))) throw new Error('INVALID_INPUT')
+    return amendProformaToInvoice(database!, { ...value, sourceDocumentId: Number(value.sourceDocumentId) }, user.id)
+  }))
+  ipcMain.handle('documents:createOrderForm', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser()
+    const value = input as CreateOrderFormInput | null
+    if (!value || !Number.isInteger(Number(value.recordId))) throw new Error('INVALID_INPUT')
+    return createOrderFormFromOrder(database!, { ...value, recordId: Number(value.recordId) }, user.id)
+  }))
+  ipcMain.handle('documents:createDeliveryNote', (_event, input: unknown) => toIpcResult(() => {
+    const user = requireSessionUser()
+    const value = input as CreateDeliveryNoteInput | null
+    if (!value || !Number.isInteger(Number(value.recordId))) throw new Error('INVALID_INPUT')
+    return createDeliveryNoteFromOrder(database!, { ...value, recordId: Number(value.recordId) }, user.id)
+  }))
+  ipcMain.handle('documents:exportPdf', (_event, id: unknown) => toIpcResult(async () => {
+    requireSessionUser()
+    if (!mainWindow) throw new Error('INVALID_INPUT')
+    const doc = getDocument(database!, Number(id))
+    if (!doc) throw new Error('DOCUMENT_NOT_FOUND')
+    return exportDocumentPdf(mainWindow, doc)
+  }))
+  ipcMain.handle('documents:print', (_event, id: unknown) => toIpcResult(async () => {
+    requireSessionUser()
+    if (!mainWindow) throw new Error('INVALID_INPUT')
+    const doc = getDocument(database!, Number(id))
+    if (!doc) throw new Error('DOCUMENT_NOT_FOUND')
+    return printDocument(mainWindow, doc)
+  }))
   const backupDirectory = path.join(app.getPath('userData'), 'backups')
   const makeBackup = async () => {
     const file = await createBackup(database!, backupDirectory)

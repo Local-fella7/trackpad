@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { LayoutDashboard, FileText, WalletCards, BarChart3, LogOut, Plus } from 'lucide-vue-next'
+import { LayoutDashboard, FileText, FileSpreadsheet, ClipboardList, WalletCards, BarChart3, LogOut, Plus } from 'lucide-vue-next'
 
-export type Page = 'dashboard' | 'orders' | 'billing' | 'reports'
+export type Page = 'dashboard' | 'orders' | 'proformas' | 'forms' | 'billing' | 'reports'
 
 defineProps<{
   page: Page
@@ -45,6 +45,14 @@ const emit = defineEmits<{
         <FileText :size="18" />
         <span>Orders</span>
         <em v-if="deliveryCount" class="nav-badge tan" :title="`${deliveryCount} due for delivery`">{{ deliveryCount }}</em>
+      </button>
+      <button type="button" :class="{ active: page === 'proformas' }" @click="emit('navigate', 'proformas')">
+        <FileSpreadsheet :size="18" />
+        <span>Proforma Invoices</span>
+      </button>
+      <button type="button" :class="{ active: page === 'forms' }" @click="emit('navigate', 'forms')">
+        <ClipboardList :size="18" />
+        <span>Order &amp; Delivery Forms</span>
       </button>
       <button type="button" :class="{ active: page === 'billing' }" @click="emit('navigate', 'billing')">
         <WalletCards :size="18" />

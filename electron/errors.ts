@@ -20,6 +20,11 @@ export function asIpcError(error: unknown): IpcError {
     REPORT_RENDER_FAILED: 'The report could not be prepared for PDF or printing.',
     PRINT_FAILED: 'The report could not be sent to the printer.',
     REPORT_FILE_NOT_FOUND: 'The saved report could not be found.',
+    SEQUENCE_NOT_CONFIGURED: 'Please set a starting document number before generating your first document.',
+    INVALID_SEQUENCE_START: 'Please enter a valid starting number (1 or greater).',
+    ORDER_NOT_FOUND: 'The selected order could not be found.',
+    ORDER_HAS_NO_ITEMS: 'This order has no line items. Add items to the order first.',
+    DOCUMENT_NOT_FOUND: 'The requested document could not be found.',
   }
   return { code, message: messages[code] ?? 'Something went wrong. Please try again.' }
 }

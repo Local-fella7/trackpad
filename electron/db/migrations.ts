@@ -124,4 +124,46 @@ export const migrations = [
     UPDATE statuses SET is_active = 1, color = '#76453B', sort_order = 4, exclude_from_totals = 1 WHERE LOWER(name) = 'cancelled';
     UPDATE statuses SET is_active = 0 WHERE LOWER(name) NOT IN ('pending', 'confirmed', 'completed', 'cancelled');
   `,
+  `
+    CREATE TABLE IF NOT EXISTS document_sequences (
+      sequence_group TEXT PRIMARY KEY CHECK (sequence_group IN ('proforma_invoice', 'order_form', 'delivery_note')),
+      start_number INTEGER,
+      next_number INTEGER,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT OR IGNORE INTO document_sequences (sequence_group, start_number, next_number) VALUES
+      ('proforma_invoice', NULL, NULL),
+      ('order_form', NULL, NULL),
+      ('delivery_note', NULL, NULL);
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY,
+      doc_type TEXT NOT NULL CHECK (doc_type IN ('proforma', 'invoice', 'order_form', 'delivery_note')),
+      sequence_group TEXT NOT NULL CHECK (sequence_group IN ('proforma_invoice', 'order_form', 'delivery_note')),
+      doc_number TEXT NOT NULL,
+      doc_number_int INTEGER NOT NULL,
+      record_id INTEGER NOT NULL REFERENCES records(id) ON DELETE CASCADE,
+      parent_document_id INTEGER REFERENCES documents(id),
+      issue_date TEXT NOT NULL,
+      client_name TEXT NOT NULL,
+      client_phone TEXT,
+      alt_phone TEXT,
+      location TEXT,
+      event_date TEXT,
+      setup_date TEXT,
+      takedown_date TEXT,
+      event_colors TEXT,
+      show_prices INTEGER NOT NULL DEFAULT 1,
+      subtotal_minor INTEGER NOT NULL DEFAULT 0,
+      discount_minor INTEGER NOT NULL DEFAULT 0,
+      grand_total_minor INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      items_json TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(sequence_group, doc_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(doc_type, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_documents_record ON documents(record_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_seq_num ON documents(sequence_group, doc_number_int);
+  `,
 ]
