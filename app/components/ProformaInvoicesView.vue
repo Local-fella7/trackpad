@@ -83,6 +83,16 @@ const sequenceModal = ref(false)
 const sequenceInput = ref('0948')
 const pendingActionAfterSequence = ref<(() => Promise<void>) | null>(null)
 
+// Generate Proforma modal state
+const DEFAULT_TERMS_TEMPLATE =
+  '50% of the total amount should be paid for you to secure the booking and as an advance.\nAnd the remaining 50% should be paid one week before delivery day.'
+const proformaModal = ref(false)
+const proformaOrder = ref<PendingOrderRow | null>(null)
+const proformaForm = reactive({
+  issueDate: new Date().toISOString().slice(0, 10),
+  notes: '',
+})
+
 // Amend Proforma -> Raise Invoice modal state
 const amendModal = ref(false)
 const amendSource = ref<DocumentRecord | null>(null)
@@ -176,21 +186,32 @@ async function saveSequenceStart() {
   }
 }
 
-async function generateProforma(order: PendingOrderRow) {
+async function openGenerateProformaModal(order: PendingOrderRow) {
   if (!sequence.value.configured) {
-    openSequenceModal(() => generateProforma(order))
+    openSequenceModal(() => openGenerateProformaModal(order))
     return
   }
+  proformaOrder.value = order
+  proformaForm.issueDate = new Date().toISOString().slice(0, 10)
+  proformaForm.notes = ''
+  proformaModal.value = true
+}
+
+async function submitGenerateProforma() {
+  if (!proformaOrder.value) return
   busy.value = true
   try {
     const res = await window.api!.documents.createProforma({
-      recordId: order.id,
-      issueDate: new Date().toISOString().slice(0, 10),
+      recordId: proformaOrder.value.id,
+      issueDate: proformaForm.issueDate,
+      notes: proformaForm.notes,
     })
     if (!res.ok) {
       await Swal.fire({ icon: 'error', title: 'Could not generate Proforma', text: res.error.message, confirmButtonColor: '#76453B' })
       return
     }
+    proformaModal.value = false
+    proformaOrder.value = null
     await loadAll()
     emit('refresh')
     previewDoc.value = res.data
@@ -356,7 +377,7 @@ onMounted(loadAll)
               <td class="num">{{ order.item_count }}</td>
               <td class="num"><strong>{{ money(order.grand_total_minor) }}</strong></td>
               <td class="actions-col">
-                <button type="button" class="btn-primary sm" :disabled="busy" @click="generateProforma(order)">
+                <button type="button" class="btn-primary sm" :disabled="busy" @click="openGenerateProformaModal(order)">
                   <FilePlus2 :size="14" />
                   <span>Generate Proforma</span>
                 </button>
@@ -493,6 +514,47 @@ onMounted(loadAll)
       </div>
     </div>
 
+    <!-- Generate Proforma Invoice Modal -->
+    <div v-if="proformaModal && proformaOrder" class="shade" @mousedown.self="proformaModal = false">
+      <section class="dialog-card">
+        <header class="dialog-header">
+          <div>
+            <p class="eyebrow">GENERATE PROFORMA INVOICE · NO. {{ sequence.nextFormatted }}</p>
+            <h3>{{ proformaOrder.client_name }} ({{ proformaOrder.record_number || `#${proformaOrder.id}` }})</h3>
+          </div>
+          <button type="button" class="close-btn" @click="proformaModal = false"><X :size="18" /></button>
+        </header>
+
+        <div class="dialog-body">
+          <label class="field">
+            <span>Proforma Issue Date</span>
+            <input v-model="proformaForm.issueDate" type="date" />
+          </label>
+
+          <div class="comment-header">
+            <span>Comment / Payment Terms (optional)</span>
+            <button type="button" class="quick-insert" @click="proformaForm.notes = DEFAULT_TERMS_TEMPLATE">
+              Insert 50%/50% template
+            </button>
+          </div>
+          <label class="field">
+            <textarea
+              v-model="proformaForm.notes"
+              rows="4"
+              placeholder="Write any payment terms or comment to appear above the bank/payment details (leave blank to omit)…"
+            />
+          </label>
+        </div>
+
+        <footer class="dialog-footer">
+          <button type="button" class="btn-outline" @click="proformaModal = false">Cancel</button>
+          <button type="button" class="btn-primary" :disabled="busy" @click="submitGenerateProforma">
+            {{ busy ? 'Generating…' : `Generate Proforma No. ${sequence.nextFormatted || ''}` }}
+          </button>
+        </footer>
+      </section>
+    </div>
+
     <!-- Set / Reset Start Number Modal -->
     <div v-if="sequenceModal" class="shade" @mousedown.self="sequenceModal = false">
       <section class="dialog-card">
@@ -615,9 +677,18 @@ onMounted(loadAll)
             </div>
           </div>
 
-          <label class="field" style="margin-top: 12px">
-            <span>Remarks / Notes (optional)</span>
-            <textarea v-model="amendForm.notes" rows="2" placeholder="Optional remarks on the invoice" />
+          <div class="comment-header" style="margin-top: 12px">
+            <span>Comment / Payment Terms (shown above payment details)</span>
+            <button type="button" class="quick-insert" @click="amendForm.notes = DEFAULT_TERMS_TEMPLATE">
+              Insert 50%/50% template
+            </button>
+          </div>
+          <label class="field">
+            <textarea
+              v-model="amendForm.notes"
+              rows="3"
+              placeholder="Write any payment terms or comment for this Invoice (leave blank to omit)…"
+            />
           </label>
 
           <div class="totals-compare">
@@ -1049,6 +1120,35 @@ tbody tr:hover td {
   padding: 8px 10px;
   font-size: 13px;
   background: #ffffff;
+}
+
+.comment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 0 5px;
+}
+
+.comment-header span {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #5a5147;
+}
+
+.quick-insert {
+  border: 1px solid #d7cfb8;
+  background: #f8fae5;
+  color: #43766C;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quick-insert:hover {
+  background: #e9f1ef;
 }
 
 .items-editor {

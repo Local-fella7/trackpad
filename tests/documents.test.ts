@@ -66,18 +66,31 @@ describe('Documents repository & safe auto-numbering', () => {
     expect(seq.configured).toBe(true)
     expect(seq.nextFormatted).toBe('0948')
 
-    // First Proforma -> 0948
-    const p1 = createProformaFromOrder(db, { recordId: order1, issueDate: '2026-11-12' }, null)
+    // First Proforma -> 0948 (no comment -> no hardcoded 50% terms)
+    const p1 = createProformaFromOrder(db, { recordId: order1, issueDate: '2026-11-12', notes: '' }, null)
     expect(p1.doc_type).toBe('proforma')
     expect(p1.doc_number).toBe('0948')
     expect(p1.grand_total_minor).toBe(505000)
     expect(listOrdersWithoutDocument(db, 'proforma').length).toBe(1)
 
-    // Second Proforma -> 0949
-    const p2 = createProformaFromOrder(db, { recordId: order2, issueDate: '2026-11-12' }, null)
+    const p1Html = buildDocumentHtml(p1, { headerSrc: '/branding/ms-header.png', footerSrc: '/branding/ms-footer.png' })
+    expect(p1Html).not.toContain('50% of the total amount')
+    expect(p1Html).not.toContain('class="payment-terms"')
+
+    // Second Proforma -> 0949 (with custom multi-line comment)
+    const p2 = createProformaFromOrder(
+      db,
+      { recordId: order2, issueDate: '2026-11-12', notes: 'Pay 30% deposit within 3 days.\nBalance due on setup.' },
+      null,
+    )
     expect(p2.doc_type).toBe('proforma')
     expect(p2.doc_number).toBe('0949')
     expect(listOrdersWithoutDocument(db, 'proforma').length).toBe(0)
+
+    const p2Html = buildDocumentHtml(p2, { headerSrc: '/branding/ms-header.png', footerSrc: '/branding/ms-footer.png' })
+    expect(p2Html).toContain('class="payment-terms"')
+    expect(p2Html).toContain('<p>Pay 30% deposit within 3 days.</p>')
+    expect(p2Html).toContain('<p>Balance due on setup.</p>')
 
     // Amend Proforma 0948 -> raises INVOICE 0950 (since 0949 is already taken)
     const inv = amendProformaToInvoice(

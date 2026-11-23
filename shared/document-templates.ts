@@ -158,6 +158,21 @@ function buildItemsTable(
   `
 }
 
+function buildCommentBlock(notes?: string | null): string {
+  const raw = String(notes ?? '').trim()
+  if (!raw) return ''
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+  if (!lines.length) return ''
+  return `
+    <div class="payment-terms">
+      ${lines.map(line => `<p>${escapeHtml(line)}</p>`).join('')}
+    </div>
+  `
+}
+
 function buildProformaOrInvoiceBody(doc: DocumentRecord): string {
   const isInvoice = doc.doc_type === 'invoice'
   const titleText = isInvoice ? `INVOICE NO: ${doc.doc_number}` : `PROFORMA INVOICE NO: ${doc.doc_number}`
@@ -181,12 +196,7 @@ function buildProformaOrInvoiceBody(doc: DocumentRecord): string {
 
     ${buildItemsTable(doc, { showPrices: Boolean(doc.show_prices), includeTotalRow: true, minRows: 7 })}
 
-    ${doc.notes ? `<div class="doc-notes"><strong>Remarks:</strong> ${escapeHtml(doc.notes)}</div>` : ''}
-
-    <div class="payment-terms">
-      <p><strong>50% of the total amount should be paid for you to secure the booking and as an advance.</strong></p>
-      <p><strong>And the remaining 50% should be paid one week before delivery day.</strong></p>
-    </div>
+    ${buildCommentBlock(doc.notes)}
 
     <table class="payment-grid">
       <tbody>
@@ -533,13 +543,22 @@ export function buildDocumentHtml(doc: DocumentRecord, assets: DocumentBrandingA
       font-size: 11.5px;
     }
     .payment-terms {
-      margin: 6px 0 14px;
+      margin: 8px 0 16px;
+      padding: 10px 14px;
+      background: #fcfaf2;
+      border: 1px solid #e6d7ad;
+      border-left: 4px solid #b8943d;
+      border-radius: 4px;
       font-size: 11.5px;
-      font-weight: 800;
-      color: #111111;
+      font-weight: 700;
+      line-height: 1.55;
+      color: #14110b;
     }
     .payment-terms p {
-      margin: 2px 0;
+      margin: 0 0 5px;
+    }
+    .payment-terms p:last-child {
+      margin-bottom: 0;
     }
     .payment-grid {
       width: 100%;
